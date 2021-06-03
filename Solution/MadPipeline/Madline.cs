@@ -48,7 +48,7 @@ namespace MadPipeline
 
         private bool isWriterCompleted;
         private bool isReaderCompleted;
-        
+
         public Madline(MadlineOptions options)
         {
             bufferSegmentPool = new BufferSegmentStack(InitialSegmentPoolSize);
@@ -63,12 +63,14 @@ namespace MadPipeline
             this.targetBytes = options.TargetBytes;
             this.Writer = new MadlineWriter(this);
             this.Reader = new MadlineReader(this);
+            this.Callback = new MadlineCallbacks();
         }
 
         public long Length => this.unconsumedBytes;
 
         public MadlineReader Reader { get; }
         public MadlineWriter Writer { get; }
+        public MadlineCallbacks Callback { get; }
 
         // 당장은 안 쓰고 있으나, 재사용을 위해 삭제하지는 않았음
         public void ResetState()

@@ -15,14 +15,15 @@ namespace MadPipeline
             {
                 targetLength = this.targetBytes;
             }
-            if (isReaderCompleted)
+            if (this.isReaderCompleted)
             {
                 throw new Exception("Reader is Completed");
             }
 
-            if (unconsumedBytes > 0 && unconsumedBytes >= targetLength)
+            if (this.unconsumedBytes > 0 &&
+                this.unconsumedBytes >= targetLength)
             {
-                GetReadResult(out result);
+                this.DoRead(out result);
                 return true;
             }
 
@@ -33,24 +34,26 @@ namespace MadPipeline
 
         public Future<ReadResult> DoRead(out ReadResult result)
         {
-            var promise = new Promise<ReadResult>();
-            GetReadResult(out result);
-            promise.Complete(result);
+            this.GetReadResult(out result);
 
-            return promise.GetFuture();
+            return Callback.GetFuture();
         }
 
         private void GetReadResult(out ReadResult result)
         {
-            var isCompleted = isWriterCompleted;
+            var isCompleted = this.isWriterCompleted;
 
             // No need to read end if there is no head
-            var head = readHead;
+            var head = this.readHead;
+            // null이 아닌 경우가 있는가?
             if (head != null)
             {
-                Debug.Assert(readTail != null);
+                Debug.Assert(this.readTail != null);
                 // Reading commit head shared with writer
-                var readOnlySequence = new ReadOnlySequence<byte>(head, readHeadIndex, readTail, readTailIndex);
+                var readOnlySequence = new ReadOnlySequence<byte>(head,
+                    this.readHeadIndex,
+                    this.readTail,
+                    this.readTailIndex);
                 result = new ReadResult(readOnlySequence, isCompleted);
             }
             else
@@ -58,7 +61,7 @@ namespace MadPipeline
                 result = new ReadResult(default, isCompleted);
             }
 
-            operationState.BeginRead();
+            this.operationState.BeginRead();
         }
 
         public bool TryWrite(in ReadOnlyMemory<byte> source, int targetLength = -1)
@@ -73,43 +76,42 @@ namespace MadPipeline
                 return false;
             }
 
-            if (sourceLength + unconsumedBytes > pauseWriterThreshold)
+            if (sourceLength + this.unconsumedBytes > this.pauseWriterThreshold)
             {
                 return false;
             }
 
-            DoWrite(in source);
+            this.DoWrite(in source);
             return true;
         }
 
         public Signal DoWrite(in ReadOnlyMemory<byte> source)
         {
-            var signal = new Signal();
             if (isWriterCompleted)
             {
                 throw new Exception("No Writing Allowed");
             }
 
-            AllocateWriteHeadIfNeeded(0);
+            this.AllocateWriteHeadIfNeeded(0);
 
-            if (source.Length <= writingHeadMemory.Length)
+            if (source.Length <= this.writingHeadMemory.Length)
             {
-                source.CopyTo(writingHeadMemory);
+                source.CopyTo(this.writingHeadMemory);
 
-                Advance(source.Length);
+                this.Advance(source.Length);
             }
             else
             {
-                Debug.Assert(writingHead != null);
+                Debug.Assert(this.writingHead != null);
                 var sourceSpan = source.Span;
-                var destination = writingHeadMemory.Span;
+                var destination = this.writingHeadMemory.Span;
 
                 while (true)
                 {
                     int writable = Math.Min(destination.Length, sourceSpan.Length);
                     sourceSpan[..writable].CopyTo(destination);
                     sourceSpan = sourceSpan[writable..];
-                    Advance(writable);
+                    this.Advance(writable);
 
                     if (sourceSpan.Length == 0)
                     {
@@ -117,25 +119,23 @@ namespace MadPipeline
                     }
 
                     // We filled the segment
-                    writingHead.End += writable;
-                    writingHeadBytesBuffered = 0;
+                    this.writingHead.End += writable;
+                    this.writingHeadBytesBuffered = 0;
 
                     // This is optimized to use pooled memory. That's why we pass 0 instead of
                     // source.Length
-                    BufferSegment newSegment = AllocateSegment(0);
+                    BufferSegment newSegment = this.AllocateSegment(0);
 
-                    writingHead.SetNext(newSegment);
-                    writingHead = newSegment;
+                    this.writingHead.SetNext(newSegment);
+                    this.writingHead = newSegment;
 
-                    destination = writingHeadMemory.Span;
+                    destination = this.writingHeadMemory.Span;
                 }
             }
 
-            CommitUnsynchronized();
-
-            signal.Set();
-
-            return signal;
+            this.CommitUnsynchronized();
+            
+            return this.Callback.WriteSignal;
         }
 
         /*
