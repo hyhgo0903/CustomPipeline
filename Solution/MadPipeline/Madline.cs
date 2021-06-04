@@ -209,6 +209,12 @@ namespace MadPipeline
             }
         }
 
+        public bool Flush()
+        {
+            //this.Callback.ReadComplete();
+            return CommitUnsynchronized();
+        }
+
         internal bool CommitUnsynchronized()
         {
             this.operationState.EndWrite();
@@ -333,6 +339,7 @@ namespace MadPipeline
                 returnStart = next;
             }
 
+            this.Callback.WriteSignal.Set();
             this.operationState.EndRead();
         }
 

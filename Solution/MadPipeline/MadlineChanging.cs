@@ -11,17 +11,12 @@ namespace MadPipeline
         // 타겟바이트 이 이하 쓰려고하면, 실패한다.
         public bool TryRead(out ReadResult result, int targetLength = -1)
         {
-            if (targetLength == -1)
-            {
-                targetLength = this.targetBytes;
-            }
             if (this.isReaderCompleted)
             {
                 throw new Exception("Reader is Completed");
             }
 
-            if (this.unconsumedBytes > 0 &&
-                this.unconsumedBytes >= targetLength)
+            if (this.unconsumedBytes > 0)
             {
                 this.DoRead(out result);
                 return true;
@@ -35,8 +30,8 @@ namespace MadPipeline
         public Future<ReadResult> DoRead(out ReadResult result)
         {
             this.GetReadResult(out result);
-
-            return Callback.GetFuture();
+            this.Reader.Advance(result.Buffer.End);
+            return Callback.GetReadFuture();
         }
 
         private void GetReadResult(out ReadResult result)
@@ -64,7 +59,7 @@ namespace MadPipeline
             this.operationState.BeginRead();
         }
 
-        public bool TryWrite(in ReadOnlyMemory<byte> source, int targetLength = -1)
+        public bool TryWrite(ReadOnlyMemory<byte> source, int targetLength = -1)
         {
             if (targetLength == -1)
             {
@@ -81,11 +76,11 @@ namespace MadPipeline
                 return false;
             }
 
-            this.DoWrite(in source);
+            this.DoWrite(source);
             return true;
         }
 
-        public Signal DoWrite(in ReadOnlyMemory<byte> source)
+        public Signal DoWrite(ReadOnlyMemory<byte> source)
         {
             if (isWriterCompleted)
             {
@@ -108,7 +103,7 @@ namespace MadPipeline
 
                 while (true)
                 {
-                    int writable = Math.Min(destination.Length, sourceSpan.Length);
+                    var writable = Math.Min(destination.Length, sourceSpan.Length);
                     sourceSpan[..writable].CopyTo(destination);
                     sourceSpan = sourceSpan[writable..];
                     this.Advance(writable);
@@ -157,7 +152,7 @@ namespace MadPipeline
             var signal = this.pipeline.Advance(received);
             signal.OnComplete(() =>
             {
-                // 시그널이 오면(promise) 하고 다시 이 함수위로 돌아온다.
+                // 시그널이 오면 다시 이 함수위로 돌아온다.
                 this.ProcessReceive1();
             });
         }
@@ -173,7 +168,6 @@ namespace MadPipeline
             // 쓰기 시도
             if (this.pipeline.TryAdvance(received) == false)
             {
-                // 실패한 경우 달아둔다. (Promise)
                 this.pipeline.Advance(received)
                     .OnComplete(() =>
                     {
