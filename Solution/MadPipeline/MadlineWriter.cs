@@ -19,7 +19,7 @@ namespace MadPipeline
         public void Advance(int bytes) => this.madline.Advance(bytes);
         public void Complete() => this.madline.CompleteWriter();
         public bool TryWrite(ReadOnlyMemory<byte> source, int targetLength = -1) => this.madline.TryWrite(source, targetLength);
-        public Signal DoWrite(ReadOnlyMemory<byte> source) => this.madline.DoWrite(source);
+        public Signal DoWrite() => this.madline.DoWrite();
         public void Flush() => this.madline.Flush();
         
     }

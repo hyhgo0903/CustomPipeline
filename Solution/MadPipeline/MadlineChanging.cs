@@ -18,7 +18,8 @@ namespace MadPipeline
 
             if (this.unconsumedBytes > 0)
             {
-                this.DoRead(out result);
+                this.GetReadResult(out result);
+                this.Reader.Advance(result.Buffer.End);
                 return true;
             }
 
@@ -27,11 +28,11 @@ namespace MadPipeline
         }
 
 
-        public Future<ReadResult> DoRead(out ReadResult result)
+        public Future<ReadResult> DoRead()
         {
-            this.GetReadResult(out result);
-            this.Reader.Advance(result.Buffer.End);
-            return Callback.GetReadFuture();
+            var promise = new Promise<ReadResult>();
+            this.Callback.ReadPromise = promise;
+            return this.Callback.ReadPromise.GetFuture();
         }
 
         private void GetReadResult(out ReadResult result)
@@ -75,13 +76,6 @@ namespace MadPipeline
             {
                 return false;
             }
-
-            this.DoWrite(source);
-            return true;
-        }
-
-        public Signal DoWrite(ReadOnlyMemory<byte> source)
-        {
             if (isWriterCompleted)
             {
                 throw new Exception("No Writing Allowed");
@@ -129,7 +123,12 @@ namespace MadPipeline
             }
 
             this.CommitUnsynchronized();
-            
+
+            return true;
+        }
+
+        public Signal DoWrite()
+        {                   
             return this.Callback.WriteSignal;
         }
 

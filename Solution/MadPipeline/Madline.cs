@@ -211,7 +211,6 @@ namespace MadPipeline
 
         public bool Flush()
         {
-            //this.Callback.ReadComplete();
             return CommitUnsynchronized();
         }
 
@@ -247,6 +246,8 @@ namespace MadPipeline
 
             this.notFlushedBytes = 0;
             this.writingHeadBytesBuffered = 0;
+
+            //this.Callback.ReadPromise.Complete();
 
             return false;
         }
@@ -340,6 +341,7 @@ namespace MadPipeline
             }
 
             this.Callback.WriteSignal.Set();
+            this.Callback.WriteSignal.Reset();
             this.operationState.EndRead();
         }
 

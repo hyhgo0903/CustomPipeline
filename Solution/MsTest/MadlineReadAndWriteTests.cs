@@ -12,21 +12,34 @@ namespace Tests
         public void ReadThenWriteTest()
         {
             WriteProcess();
-            var isRead = this.Madline.Reader.TryRead(out var result);
-            Assert.IsTrue(isRead);
-            Assert.AreNotEqual("Hell World!", Encoding.ASCII.GetString(result.Buffer.ToArray()));
-            Assert.AreEqual("Hello World!", Encoding.ASCII.GetString(result.Buffer.ToArray()));
-            Assert.AreEqual(12, result.Buffer.Length);
+            ReadProcess();
         }
         public void WriteProcess()
         {
             var received = Encoding.ASCII.GetBytes("Hello World!");
             if (this.Madline.TryWrite(received) == false)
             {
-                this.Madline.Callback.WriteSignal.OnCompleted(
+                this.Madline.DoWrite().OnCompleted(
                     () =>
                     {
                         this.WriteProcess();
+                    });
+            }
+        }
+        public void ReadProcess()
+        {
+            if (this.Madline.TryRead(out var result))
+            {
+                Assert.AreNotEqual("Hell World!", Encoding.ASCII.GetString(result.Buffer.ToArray()));
+                Assert.AreEqual("Hello World!", Encoding.ASCII.GetString(result.Buffer.ToArray()));
+                Assert.AreEqual(12, result.Buffer.Length);
+            }
+            else
+            {
+                this.Madline.DoRead().Then(
+                    result =>
+                    {
+                        this.ReadProcess();
                     });
             }
         }
