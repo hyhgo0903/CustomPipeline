@@ -10,7 +10,8 @@ namespace MadPipeline
             this.ReadPromise = new Promise<ReadResult>();
             this.WriteSignal = new Signal();
         }
-        public Signal WriteSignal { get; }
+
         public Promise<ReadResult> ReadPromise { get; set; }
+        public Signal WriteSignal { get; }
     }
 }

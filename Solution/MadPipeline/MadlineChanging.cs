@@ -19,7 +19,6 @@ namespace MadPipeline
             if (this.unconsumedBytes > 0)
             {
                 this.GetReadResult(out result);
-                this.Reader.Advance(result.Buffer.End);
                 return true;
             }
 
@@ -72,7 +71,7 @@ namespace MadPipeline
                 return false;
             }
 
-            if (sourceLength + this.unconsumedBytes > this.pauseWriterThreshold)
+            if (this.unconsumedBytes >= this.pauseWriterThreshold)
             {
                 return false;
             }
@@ -129,6 +128,7 @@ namespace MadPipeline
 
         public Signal DoWrite()
         {                   
+            this.Callback.WriteSignal.Reset();
             return this.Callback.WriteSignal;
         }
 
