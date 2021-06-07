@@ -3,15 +3,15 @@ using MadPipeline.MadngineSource;
 
 namespace MadPipeline
 {
-    public sealed class MadlineCallbacks
+    public sealed class MadlineSignals
     {
-        public MadlineCallbacks()
+        public MadlineSignals()
         {
-            this.ReadPromise = new Promise<ReadResult>();
+            this.ReadSignal = new Signal();
             this.WriteSignal = new Signal();
         }
 
-        public Promise<ReadResult> ReadPromise { get; set; }
+        public Signal ReadSignal { get; }
         public Signal WriteSignal { get; }
     }
 }

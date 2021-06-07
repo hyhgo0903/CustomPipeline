@@ -27,11 +27,10 @@ namespace MadPipeline
         }
 
 
-        public Future<ReadResult> DoRead()
+        public Signal DoRead()
         {
-            var promise = new Promise<ReadResult>();
-            this.Callback.ReadPromise = promise;
-            return this.Callback.ReadPromise.GetFuture();
+            this.Callback.ReadSignal.Reset();
+            return this.Callback.ReadSignal;
         }
 
         private void GetReadResult(out ReadResult result)
@@ -61,17 +60,12 @@ namespace MadPipeline
 
         public bool TryWrite(ReadOnlyMemory<byte> source, int targetLength = -1)
         {
-            if (targetLength == -1)
+            if (targetLength != -1)
             {
-                targetLength = this.targetBytes;
-            }
-            var sourceLength = source.Length;
-            if (sourceLength < targetLength)
-            {
-                return false;
+                this.targetBytes = targetLength;
             }
 
-            if (this.unconsumedBytes >= this.pauseWriterThreshold)
+            if (source.Length + this.unconsumedBytes > this.pauseWriterThreshold)
             {
                 return false;
             }
@@ -81,7 +75,7 @@ namespace MadPipeline
             }
 
             this.AllocateWriteHeadIfNeeded(0);
-
+            
             if (source.Length <= this.writingHeadMemory.Length)
             {
                 source.CopyTo(this.writingHeadMemory);

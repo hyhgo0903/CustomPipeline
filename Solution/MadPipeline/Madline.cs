@@ -63,14 +63,14 @@ namespace MadPipeline
             this.targetBytes = options.TargetBytes;
             this.Writer = new MadlineWriter(this);
             this.Reader = new MadlineReader(this);
-            this.Callback = new MadlineCallbacks();
+            this.Callback = new MadlineSignals();
         }
 
         public long Length => this.unconsumedBytes;
 
         public MadlineReader Reader { get; }
         public MadlineWriter Writer { get; }
-        public MadlineCallbacks Callback { get; }
+        public MadlineSignals Callback { get; }
 
         // 당장은 안 쓰고 있으나, 재사용을 위해 삭제하지는 않았음
         public void ResetState()
@@ -246,7 +246,11 @@ namespace MadPipeline
 
             this.notFlushedBytes = 0;
             this.writingHeadBytesBuffered = 0;
-            
+
+            if (unconsumedBytes >= this.targetBytes)
+            {
+                this.Callback.ReadSignal.Set();
+            }
 
             return false;
         }

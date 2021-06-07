@@ -16,7 +16,7 @@ namespace MadPipeline
 
         public bool TryRead(out ReadResult result, int targetLength = -1)
             => this.madline.TryRead(out result, targetLength);
-        public Future<ReadResult> DoRead() => this.madline.DoRead();
+        public Signal DoRead() => this.madline.DoRead();
         public void Advance(SequencePosition consumed) => this.madline.AdvanceReader(consumed);
         public void Advance(SequencePosition consumed, SequencePosition examined) => this.madline.AdvanceReader(consumed, examined);
         public void Complete() => this.madline.CompleteReader();
