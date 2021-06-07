@@ -1,8 +1,8 @@
-﻿using System;
-using System.Diagnostics.CodeAnalysis;
-
-namespace MadPipeline
+﻿namespace MadPipeline
 {
+    using System;
+    using System.Diagnostics.CodeAnalysis;
+
     // 버퍼세그먼트 스택 또한 기본적으로 Pipeline과 동일하게 이용
     internal struct BufferSegmentStack
     {

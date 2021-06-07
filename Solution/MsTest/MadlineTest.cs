@@ -1,9 +1,8 @@
-﻿using System;
-using MadPipeline;
-using Tests.Infrastructure;
-
-namespace Tests
+﻿namespace Tests
 {
+    using System;
+    using MadPipeline;
+    using Infrastructure;
 
     public abstract class MadlineTest : IDisposable
     {

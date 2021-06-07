@@ -1,11 +1,10 @@
-﻿using System;
-using System.Buffers;
-using System.Diagnostics;
-using System.Net.Sockets;
-using MadPipeline.MadngineSource;
-
-namespace MadPipeline
+﻿namespace MadPipeline
 {
+    using System;
+    using System.Buffers;
+    using System.Diagnostics;
+    using MadngineSource;
+
     public sealed partial class Madline
     {
         // 타겟바이트 이 이하 쓰려고하면, 실패한다.
@@ -27,10 +26,10 @@ namespace MadPipeline
         }
 
 
-        public Signal DoRead()
+        public Promise<ReadResult> DoRead()
         {
-            this.Callback.ReadSignal.Reset();
-            return this.Callback.ReadSignal;
+            this.Callback.ReadPromise = new Promise<ReadResult>();
+            return this.Callback.ReadPromise;
         }
 
         private void GetReadResult(out ReadResult result)
@@ -60,14 +59,13 @@ namespace MadPipeline
 
         public bool TryWrite(ReadOnlyMemory<byte> source, int targetLength = -1)
         {
+            if (this.operationState.IsWritingPaused)
+            {
+                return false;
+            }
             if (targetLength != -1)
             {
                 this.targetBytes = targetLength;
-            }
-
-            if (source.Length + this.unconsumedBytes > this.pauseWriterThreshold)
-            {
-                return false;
             }
             if (isWriterCompleted)
             {
@@ -125,82 +123,6 @@ namespace MadPipeline
             this.Callback.WriteSignal.Reset();
             return this.Callback.WriteSignal;
         }
-
-        /*
-
-    // 사용례
-    class Example
-    {
-        private Socket socket;
-
-        private Pipeline pipeline = new();
-        // ...
-        public void ProcessReceive1()
-        {
-            // 메모리를 가온다
-            var memory = this.pipeline.GetMemory(1);
-            this.receiveArgs.SetBuffer = memory;
-            var received = this.socket.ReceiveAsync(this.receiveArgs);
-            // 대충 소켓으로부터 받는 코드
-            var signal = this.pipeline.Advance(received);
-            signal.OnComplete(() =>
-            {
-                // 시그널이 오면 다시 이 함수위로 돌아온다.
-                this.ProcessReceive1();
-            });
-        }
-
-
-        public void ProcessReceive2()
-        {
-            // 메모리를 가온다
-            var memory = this.pipeline.GetMemory(1);
-            this.receiveArgs.SetBuffer = memory;
-            var received = this.socket.ReceiveAsync(this.receiveArgs);
-            // 대충 소켓으로부터 받는 코드
-            // 쓰기 시도
-            if (this.pipeline.TryAdvance(received) == false)
-            {
-                this.pipeline.Advance(received)
-                    .OnComplete(() =>
-                    {
-                        this.ProcessReceive2();
-                    });
-            }
-            // 성공한 경우 다시 Receive하는 프로세스.
-            else
-            {
-                this.ProcessReceive2();
-            }
-        }
-
-
-
-
-        public void ProcessSend()
-        {
-            if (this.pipeline.TryRead(var result, size))
-            {
-                this.SendToSocket(result.Buffer);
-            }
-            else
-            {
-                this.pipeline.Read(size)
-                    .Then(result =>
-                    {
-                        this.SendToSocket(result.Buffer);
-                    });
-            }
-        }
-        // result 로 pipe가 완료되었는지 캔슬되었는지 등등 검사 후 
-        //스트림 내용 그대로 소켓에 Send 하는 작업
-        public void SendToSocket(Buffer buffer)
-        {
-            //....
-            this.pipeline.AdvanceTo(result.Buffer.End);
-            this.ProcessSend();
-        }
-        */
     }
 
 }

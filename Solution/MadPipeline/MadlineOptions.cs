@@ -1,8 +1,7 @@
-﻿using System.Buffers;
-using System.Security.Cryptography.X509Certificates;
-
-namespace MadPipeline
+﻿namespace MadPipeline
 {
+    using System.Buffers;
+
     public sealed class MadlineOptions
     {
         private const int DefaultMinimumSegmentSize = 4096;

@@ -1,11 +1,11 @@
-﻿using System;
-using System.Buffers;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
-using System.Threading;
-
-namespace Tests.Infrastructure
+﻿namespace Tests.Infrastructure
 {
+    using System;
+    using System.Buffers;
+    using System.Runtime.CompilerServices;
+    using System.Runtime.InteropServices;
+    using System.Threading;
+
     public class TestMemoryPool : MemoryPool<byte>
     {
         private MemoryPool<byte> pool = Shared;

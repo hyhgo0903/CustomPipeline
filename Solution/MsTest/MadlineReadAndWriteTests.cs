@@ -1,38 +1,35 @@
-﻿using System;
-using System.Buffers;
-using System.Text;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Tests.Infrastructure;
-
-namespace Tests
+﻿namespace Tests
 {
+    using System.Buffers;
+    using System.Text;
+    using Microsoft.VisualStudio.TestTools.UnitTesting;
+    using Infrastructure;
+
     [TestClass]
     public sealed class MadlineCallbackTests : MadlineTest
     {
         private int writeProcessPassed;
         private int readProcessPassed;
 
-
         // 데이터를 읽도록 시도하고, 실패한 경우 예약
         public void WriteProcess()
         {
             ++writeProcessPassed;
             var received = Encoding.ASCII.GetBytes("Hello World!");
-            if (this.Madline.TryWrite(received) == false)
+            if (this.Madline.Writer.TryWrite(received) == false)
             {
-                this.Madline.DoWrite().OnCompleted(
+                this.Madline.Writer.DoWrite().OnCompleted(
                     () =>
                     {
                         this.WriteProcess();
                     });
             }
         }
-
         // WriteProcess()를 통해 기록된 것을 읽고 구문분석
         public void ReadProcess()
         {
             ++readProcessPassed;
-            if (this.Madline.TryRead(out var result))
+            if (this.Madline.Reader.TryRead(out var result))
             {
                 Assert.AreNotEqual("Hell World!", Encoding.ASCII.GetString(result.Buffer.ToArray()));
                 Assert.AreEqual("Hello World!", Encoding.ASCII.GetString(result.Buffer.ToArray()));
@@ -41,9 +38,10 @@ namespace Tests
             }
             else
             {
-                this.Madline.DoRead().OnCompleted(
-                    () =>
+                this.Madline.Reader.DoRead().GetFuture().Then(
+                    readResult =>
                     {
+                        Assert.AreEqual(12, readResult.Buffer.Length);
                         this.ReadProcess();
                     });
             }
@@ -61,13 +59,12 @@ namespace Tests
         {
             this.WriteProcess();
             this.WriteProcess();
-            this.Madline.TryRead(out var result);
-            ReadTwiceWrittenProcess();
+            this.ReadTwiceWrittenProcess();
         }
         public void ReadTwiceWrittenProcess()
         {
             ++readProcessPassed;
-            if (this.Madline.TryRead(out var result))
+            if (this.Madline.Reader.TryRead(out var result))
             {
                 Assert.AreNotEqual("Hell World!", Encoding.ASCII.GetString(result.Buffer.ToArray()));
                 Assert.AreEqual("Hello World!Hello World!", Encoding.ASCII.GetString(result.Buffer.ToArray()));
@@ -76,31 +73,13 @@ namespace Tests
             }
             else
             {
-                this.Madline.DoRead().OnCompleted(
-                    () =>
+                this.Madline.Reader.DoRead().GetFuture().Then(
+                    readResult =>
                     {
+                        Assert.AreEqual(24, readResult.Buffer.Length);
                         this.ReadTwiceWrittenProcess();
                     });
             }
-        }
-
-
-        [TestMethod]
-        public void PauseThresholdTest()
-        {
-            for (var i = 0; i < 50; ++i)
-            {
-                this.WriteProcess();
-            }
-            
-            this.Madline.TryRead(out var result);
-
-            // PauseThreshold를 넘으면 더 이상 받을 수 없음
-            Assert.IsTrue(result.Buffer.Length <= MaximumSizeHigh);
-            this.Madline.Reader.Advance(result.Buffer.End);
-            this.ReadProcess();
-            Assert.AreEqual(51, writeProcessPassed);
-            Assert.AreEqual(1, readProcessPassed);
         }
 
         [TestMethod]
@@ -110,7 +89,7 @@ namespace Tests
             this.Madline.Writer.WriteEmpty(MaximumSizeHigh);
             this.Madline.Writer.Flush();
 
-            // 이땐 TryWrite false가 되며, Write예약
+            // 빈 데이터로 채웠으므로 이땐 TryWrite가 false가 되며, Write가 예약된다.
             this.WriteProcess();
 
             this.Madline.TryRead(out var buffer);
@@ -123,21 +102,51 @@ namespace Tests
             Assert.AreEqual(2, writeProcessPassed);
             Assert.AreEqual(1, readProcessPassed);
         }
-        
+
+        [TestMethod]
+        public void PauseThresholdTest()
+        {
+            for (var i = 0; i < 50; ++i)
+            {
+                this.WriteProcess();
+            }
+            
+            this.Madline.TryRead(out var result);
+
+            // PauseThreshold를 넘으면 더 이상 받을 수 없음
+            // 이것을 넘어가는 쓰기는 예약이 된다. (하나까지만)
+            Assert.IsTrue(result.Buffer.Length <= MaximumSizeHigh + 12);
+
+            // Advance 과정에서 예약된 쓰기가 한 번 호출된다.
+            this.Madline.Reader.Advance(result.Buffer.End);
+            // 예약된 쓰기작업 구문 분석(TryRead)
+            this.ReadProcess();
+
+            Assert.AreEqual(51, writeProcessPassed);
+            Assert.AreEqual(1, readProcessPassed);
+
+            // 이 이후로도 읽기 쓰기 잘되나 한번 확인용
+            this.WriteProcess();
+            this.ReadProcess();
+            Assert.AreEqual(52, writeProcessPassed);
+            Assert.AreEqual(2, readProcessPassed);
+        }
+
         [TestMethod]
         public void ReadWhenBufferIsEmptyTest()
         {
             // 읽을게 없음 : TryRead가 false로 되며 예약
             this.ReadProcess();
+            this.ReadProcess();
+            this.ReadProcess();
             // TryWrite의 Flush과정에서 읽기 예약된 게 있다면 실행
             this.WriteProcess();
 
             Assert.AreEqual(1, writeProcessPassed);
-            // 처음 ReadProcess 호출되며 한번, 예약된 ReadProcess가 진행되며 두 번
-            Assert.AreEqual(2, readProcessPassed);
+            // 처음 ReadProcess 2회 호출되며 세 번, 예약된 ReadProcess가 진행되며 네 번
+            Assert.AreEqual(4, readProcessPassed);
         }
-
-
+        
         [TestMethod]
         public void TargetBytesTest()
         {
@@ -161,9 +170,9 @@ namespace Tests
             ++writeProcessPassed;
             var received = Encoding.ASCII.GetBytes("Hello World!");
             // 타겟바이트가 기록되는 데이터보다 크도록 설정
-            if (this.Madline.TryWrite(received, 15) == false)
+            if (this.Madline.Writer.TryWrite(received, 20) == false)
             {
-                this.Madline.DoWrite().OnCompleted(
+                this.Madline.Writer.DoWrite().OnCompleted(
                     () =>
                     {
                         this.WriteProcessWithTargetBytes();

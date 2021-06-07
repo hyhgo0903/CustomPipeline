@@ -1,7 +1,7 @@
-﻿using MadPipeline;
-
-namespace Tests.Infrastructure
+﻿namespace Tests.Infrastructure
 {
+    using MadPipeline;
+
     public static class TestWriterExtensions
     {
         public static MadlineWriter WriteEmpty(this MadlineWriter writer, int count)

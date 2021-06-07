@@ -1,11 +1,9 @@
-﻿using System;
-using System.Text;
-using MadPipeline;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using MadPipeline.MadngineSource;
-
-namespace Tests
+﻿namespace Tests
 {
+    using MadPipeline;
+    using MadPipeline.MadngineSource;
+    using Microsoft.VisualStudio.TestTools.UnitTesting;
+
     [TestClass]
     public sealed class CallbackTest : MadlineTest
     {
@@ -37,6 +35,38 @@ namespace Tests
             signal.Reset();
             Assert.AreEqual(1, signalTest2);
             Assert.AreEqual(1, signalTest);
+
+        }
+
+        [TestMethod]
+        public void PromiseThenCompleteTest()
+        {
+            // promise는 그때그때 만들어져야
+            // SetResult후 반환하는 구조로 한 뒤
+            // Then으로 
+            var promise = new Promise<ReadResult>();
+            var promiseTest = 0;
+            promise.GetFuture().Then(_ => promiseTest += 1);
+            Assert.AreEqual(0, promiseTest);
+            promise.Complete(new ReadResult());
+            Assert.AreEqual(1, promiseTest);
+            promise.Complete(new ReadResult());
+            Assert.AreEqual(1, promiseTest);
+        }
+        [TestMethod]
+        public void PromiseMultipleThenTest()
+        {
+            // Then으로 여러개 달기
+            var promise = new Promise<ReadResult>();
+            var promiseTest = 0;
+            var promiseTest2 = 0;
+            promise.GetFuture().Then(_ => promiseTest += 1)
+                .Then(_ => promiseTest2 += 1);
+            Assert.AreEqual(0, promiseTest2);
+            Assert.AreEqual(0, promiseTest);
+            promise.Complete(new ReadResult());
+            Assert.AreEqual(1, promiseTest2);
+            Assert.AreEqual(1, promiseTest);
         }
     }
 }

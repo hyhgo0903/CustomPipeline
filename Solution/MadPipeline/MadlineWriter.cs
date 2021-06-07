@@ -1,9 +1,9 @@
-﻿using System;
-using System.Buffers;
-using MadPipeline.MadngineSource;
-
-namespace MadPipeline
+﻿namespace MadPipeline
 {
+    using System;
+    using System.Buffers;
+    using MadngineSource;
+
     public sealed class MadlineWriter : IBufferWriter<byte>
     {
         // 생성자에서 this로 입력받음

@@ -1,9 +1,9 @@
-﻿using System;
-using System.Buffers;
-using System.Diagnostics;
-
-namespace MadPipeline
+﻿namespace MadPipeline
 {
+    using System;
+    using System.Buffers;
+    using System.Diagnostics;
+
     public sealed partial class Madline
     {
         // 4KB(DefaultMinimumSegmentSize == 4096)을 곱할 시 용량상 64(혹은 65?)KB
@@ -63,20 +63,18 @@ namespace MadPipeline
             this.targetBytes = options.TargetBytes;
             this.Writer = new MadlineWriter(this);
             this.Reader = new MadlineReader(this);
-            this.Callback = new MadlineSignals();
+            this.Callback = new MadlineCallbacks();
         }
 
         public long Length => this.unconsumedBytes;
 
         public MadlineReader Reader { get; }
         public MadlineWriter Writer { get; }
-        public MadlineSignals Callback { get; }
+        public MadlineCallbacks Callback { get; }
 
         // 당장은 안 쓰고 있으나, 재사용을 위해 삭제하지는 않았음
         public void ResetState()
         {
-            this.ClearReservedRead();
-            this.ClearReservedWrite();
             this.operationState = default;
             this.isWriterCompleted = false;
             this.isReaderCompleted = false;
@@ -247,9 +245,15 @@ namespace MadPipeline
             this.notFlushedBytes = 0;
             this.writingHeadBytesBuffered = 0;
 
-            if (unconsumedBytes >= this.targetBytes)
+            if (unconsumedBytes >= this.targetBytes && this.readHead != null)
             {
-                this.Callback.ReadSignal.Set();
+                var readOnlySequence = new ReadOnlySequence<byte>(this.readHead,
+                    this.readHeadIndex,
+                    this.readTail,
+                    this.readTailIndex);
+                var result = new ReadResult(readOnlySequence, this.isWriterCompleted);
+
+                this.Callback.ReadPromise.Complete(result);
             }
 
             return false;
@@ -417,22 +421,11 @@ namespace MadPipeline
 
                 returnSegment.ResetMemory();
             }
-
-            this.ClearReservedRead();
-            this.ClearReservedWrite();
+            
             this.writingHead = null;
             this.readHead = null;
             this.readTail = null;
             this.lastExaminedIndex = -1;
-        }
-
-        private void ClearReservedRead()
-        {
-            this.operationState.EndReserveRead();
-        }
-        private void ClearReservedWrite()
-        {
-            this.operationState.EndReserveWrite();
         }
         
         public void Reset()
