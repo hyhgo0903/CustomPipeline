@@ -17,7 +17,7 @@
 
             if (this.unconsumedBytes > 0)
             {
-                this.GetReadResult(out result);
+                this.GetReadResult(out result, targetLength);
                 return true;
             }
 
@@ -26,27 +26,32 @@
         }
 
 
-        public Promise<ReadResult> DoRead()
+        public Future<ReadResult> DoRead()
         {
-            this.Callback.ReadPromise = new Promise<ReadResult>();
-            return this.Callback.ReadPromise;
+            var promise = new Promise<ReadResult>();
+            this.Callback.ReadPromise = promise;
+            return promise.GetFuture();
         }
 
-        private void GetReadResult(out ReadResult result)
+        private void GetReadResult(out ReadResult result, int targetLength)
         {
             var isCompleted = this.isWriterCompleted;
-
-            // No need to read end if there is no head
             var head = this.readHead;
-            // null이 아닌 경우가 있는가?
             if (head != null)
             {
                 Debug.Assert(this.readTail != null);
                 // Reading commit head shared with writer
+
                 var readOnlySequence = new ReadOnlySequence<byte>(head,
                     this.readHeadIndex,
                     this.readTail,
                     this.readTailIndex);
+                var length = BufferSegment.GetLength(head, this.readHeadIndex,
+                    this.readTail, this.readTailIndex);
+
+                // target길이가 버퍼길이보다 작고, target길이가 유효하게(0이상) 입력된 경우라면 잘라서 일부만 제공
+                readOnlySequence = length > targetLength && targetLength > 0 ?
+                    readOnlySequence.Slice(0, targetLength) : readOnlySequence;
                 result = new ReadResult(readOnlySequence, isCompleted);
             }
             else
@@ -59,15 +64,16 @@
 
         public bool TryWrite(ReadOnlyMemory<byte> source, int targetLength = -1)
         {
+            // unconsumedBytes가 PauseWriterThreshold를 넘고있는 경우임
             if (this.operationState.IsWritingPaused)
             {
                 return false;
             }
-            if (targetLength != -1)
+            if (targetLength >= 0)
             {
                 this.targetBytes = targetLength;
             }
-            if (isWriterCompleted)
+            if (this.isWriterCompleted)
             {
                 throw new Exception("No Writing Allowed");
             }
@@ -113,7 +119,7 @@
                 }
             }
 
-            this.CommitUnsynchronized();
+            this.Flush();
 
             return true;
         }

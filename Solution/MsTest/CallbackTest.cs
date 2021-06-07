@@ -53,6 +53,7 @@
             promise.Complete(new ReadResult());
             Assert.AreEqual(1, promiseTest);
         }
+
         [TestMethod]
         public void PromiseMultipleThenTest()
         {

@@ -35,12 +35,10 @@
         }
         public void PauseWrite()
         {
-            this.EndWrite();
             this.state |= State.WritingPaused;
         }
         public void ResumeWrite()
         {
-            this.BeginWrite();
             this.state &= ~State.WritingPaused;
         }
 

@@ -6,7 +6,7 @@
     using Infrastructure;
 
     [TestClass]
-    public sealed class MadlineCallbackTests : MadlineTest
+    public sealed class ReadAndWriteWithCallbackTests : MadlineTest
     {
         private int writeProcessPassed;
         private int readProcessPassed;
@@ -14,10 +14,11 @@
         // 데이터를 읽도록 시도하고, 실패한 경우 예약
         public void WriteProcess()
         {
-            ++writeProcessPassed;
+            ++this.writeProcessPassed;
             var received = Encoding.ASCII.GetBytes("Hello World!");
             if (this.Madline.Writer.TryWrite(received) == false)
             {
+                // TryWrite에 실패한다면 이 함수를 액션으로 예약
                 this.Madline.Writer.DoWrite().OnCompleted(
                     () =>
                     {
@@ -28,9 +29,10 @@
         // WriteProcess()를 통해 기록된 것을 읽고 구문분석
         public void ReadProcess()
         {
-            ++readProcessPassed;
+            ++this.readProcessPassed;
             if (this.Madline.Reader.TryRead(out var result))
             {
+                // TryWrite에 성공했을때 result를 이용한 작업을 여기서
                 Assert.AreNotEqual("Hell World!", Encoding.ASCII.GetString(result.Buffer.ToArray()));
                 Assert.AreEqual("Hello World!", Encoding.ASCII.GetString(result.Buffer.ToArray()));
                 Assert.AreEqual(12, result.Buffer.Length);
@@ -38,7 +40,8 @@
             }
             else
             {
-                this.Madline.Reader.DoRead().GetFuture().Then(
+                // TryWrite에 실패한다면 이 함수를 액션으로 예약
+                this.Madline.Reader.DoRead().Then(
                     readResult =>
                     {
                         Assert.AreEqual(12, readResult.Buffer.Length);
@@ -63,17 +66,17 @@
         }
         public void ReadTwiceWrittenProcess()
         {
-            ++readProcessPassed;
+            ++this.readProcessPassed;
             if (this.Madline.Reader.TryRead(out var result))
             {
-                Assert.AreNotEqual("Hell World!", Encoding.ASCII.GetString(result.Buffer.ToArray()));
+                Assert.AreNotEqual("Hello World!", Encoding.ASCII.GetString(result.Buffer.ToArray()));
                 Assert.AreEqual("Hello World!Hello World!", Encoding.ASCII.GetString(result.Buffer.ToArray()));
                 Assert.AreEqual(24, result.Buffer.Length);
                 this.Madline.Reader.Advance(result.Buffer.End);
             }
             else
             {
-                this.Madline.Reader.DoRead().GetFuture().Then(
+                this.Madline.Reader.DoRead().Then(
                     readResult =>
                     {
                         Assert.AreEqual(24, readResult.Buffer.Length);
@@ -99,14 +102,14 @@
             this.ReadProcess();
 
             // 처음 WriteProcess 호출되며 한번, 예약된 WriteProcess가 진행되며 두 번
-            Assert.AreEqual(2, writeProcessPassed);
-            Assert.AreEqual(1, readProcessPassed);
+            Assert.AreEqual(2, this.writeProcessPassed);
+            Assert.AreEqual(1, this.readProcessPassed);
         }
 
         [TestMethod]
         public void PauseThresholdTest()
         {
-            for (var i = 0; i < 50; ++i)
+            for (var i = 0; i < 100; ++i)
             {
                 this.WriteProcess();
             }
@@ -122,14 +125,14 @@
             // 예약된 쓰기작업 구문 분석(TryRead)
             this.ReadProcess();
 
-            Assert.AreEqual(51, writeProcessPassed);
-            Assert.AreEqual(1, readProcessPassed);
+            Assert.AreEqual(101, this.writeProcessPassed);
+            Assert.AreEqual(1, this.readProcessPassed);
 
             // 이 이후로도 읽기 쓰기 잘되나 한번 확인용
             this.WriteProcess();
             this.ReadProcess();
-            Assert.AreEqual(52, writeProcessPassed);
-            Assert.AreEqual(2, readProcessPassed);
+            Assert.AreEqual(102, this.writeProcessPassed);
+            Assert.AreEqual(2, this.readProcessPassed);
         }
 
         [TestMethod]
@@ -142,11 +145,13 @@
             // TryWrite의 Flush과정에서 읽기 예약된 게 있다면 실행
             this.WriteProcess();
 
-            Assert.AreEqual(1, writeProcessPassed);
+            Assert.AreEqual(1, this.writeProcessPassed);
             // 처음 ReadProcess 2회 호출되며 세 번, 예약된 ReadProcess가 진행되며 네 번
-            Assert.AreEqual(4, readProcessPassed);
+            Assert.AreEqual(4, this.readProcessPassed);
         }
         
+
+
         [TestMethod]
         public void TargetBytesTest()
         {
@@ -155,19 +160,19 @@
             // 소스의 길이가 타겟바이트보다 적음(더 들어와야 예약이 실행됨 -> 여전히 예약)
             this.WriteProcessWithTargetBytes();
 
-            Assert.AreEqual(1, writeProcessPassed);
+            Assert.AreEqual(1, this.writeProcessPassed);
             // 앞선 테스트와 달리 예약된 읽기 작업이 실행되지 않았음 -> 1번 호출
-            Assert.AreEqual(1, readProcessPassed);
+            Assert.AreEqual(1, this.readProcessPassed);
 
             // 더 들어와서 기록과 함께 예약이 실행
             this.WriteProcessWithTargetBytes();
 
-            Assert.AreEqual(2, writeProcessPassed);
-            Assert.AreEqual(2, readProcessPassed);
+            Assert.AreEqual(2, this.writeProcessPassed);
+            Assert.AreEqual(2, this.readProcessPassed);
         }
         public void WriteProcessWithTargetBytes()
         {
-            ++writeProcessPassed;
+            ++this.writeProcessPassed;
             var received = Encoding.ASCII.GetBytes("Hello World!");
             // 타겟바이트가 기록되는 데이터보다 크도록 설정
             if (this.Madline.Writer.TryWrite(received, 20) == false)
@@ -179,5 +184,28 @@
                     });
             }
         }
+
+        [TestMethod]
+        public void ReadWithTargetLength()
+        {
+            this.WriteProcess();
+
+            // 5 길이만 읽게끔
+            this.Madline.Reader.TryRead(out var result, 6);
+            Assert.AreNotEqual("Hello World!", Encoding.ASCII.GetString(result.Buffer.ToArray()));
+            Assert.AreEqual("Hello ", Encoding.ASCII.GetString(result.Buffer.ToArray()));
+            this.Madline.Reader.Advance(result.Buffer.End);
+
+            this.WriteProcess();
+
+            this.Madline.Reader.TryRead(out var result2, 10);
+            Assert.AreEqual("World!Hell", Encoding.ASCII.GetString(result2.Buffer.ToArray()));
+            this.Madline.Reader.Advance(result2.Buffer.End);
+
+            this.Madline.Reader.TryRead(out var result3);
+            Assert.AreEqual("o World!", Encoding.ASCII.GetString(result3.Buffer.ToArray()));
+            this.Madline.Reader.Advance(result3.Buffer.End);
+        }
+
     }
 }

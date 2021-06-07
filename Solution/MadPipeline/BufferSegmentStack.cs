@@ -35,7 +35,7 @@
 
         public void Push(BufferSegment item)
         {
-            int stackSize = this.size;
+            var stackSize = this.size;
             SegmentAsValueType[] segmentArray = this.array;
 
             if ((uint)stackSize < (uint)segmentArray.Length)

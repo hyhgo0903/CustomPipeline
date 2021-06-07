@@ -21,6 +21,5 @@
         public bool TryWrite(ReadOnlyMemory<byte> source, int targetBytes = -1) => this.madline.TryWrite(source, targetBytes);
         public Signal DoWrite() => this.madline.DoWrite();
         public void Flush() => this.madline.Flush();
-        
     }
 }

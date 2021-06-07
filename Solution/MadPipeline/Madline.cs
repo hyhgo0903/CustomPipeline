@@ -12,7 +12,7 @@
         public const int MaxSegmentPoolSize = 256;
 
         private int targetBytes;
-
+        
         // 마지막 검사한 지점, 얼마나 많은 바이트가 해제되어야하는지 계산하기 위해
         private long lastExaminedIndex = -1;
         // flush됐지만 reader에 의해 사용되지 않은 바이트
@@ -84,8 +84,7 @@
             this.notFlushedBytes = 0;
             this.unconsumedBytes = 0;
         }
-
-
+        
         // 할당
         public Memory<byte> GetMemory(int sizeHint)
         {
@@ -154,19 +153,18 @@
         // Segment 꺼내와서 할당
         private BufferSegment AllocateSegment(int sizeHint)
         {
-            // Segment를 풀에서 꺼내옴
-            BufferSegment newSegment = this.CreateSegmentUnsynchronized();
-
-            int maxSize = this.maxPooledBufferSize;
-            if (this.pool != null && sizeHint <= maxSize)
+            var newSegment = this.CreateSegment();
+            
+            if (this.pool != null && sizeHint <= this.maxPooledBufferSize)
             {
                 // Use the specified pool as it fits
-                newSegment.SetOwnedMemory(this.pool.Rent(this.GetSegmentSize(sizeHint, maxSize)));
+                newSegment.SetOwnedMemory(this.pool.Rent(this.GetSegmentSize(
+                    sizeHint, this.maxPooledBufferSize)));
             }
             else
             {
                 // Use the array pool
-                int sizeToRequest = this.GetSegmentSize(sizeHint);
+                var sizeToRequest = this.GetSegmentSize(sizeHint);
                 newSegment.SetOwnedMemory(ArrayPool<byte>.Shared.Rent(sizeToRequest));
             }
 
@@ -180,23 +178,17 @@
             // First we need to handle case where hint is smaller than minimum segment size
             sizeHint = Math.Max(this.minimumSegmentSize, sizeHint);
             // After that adjust it to fit into pools max buffer size
-            int adjustedToMaximumSize = Math.Min(maxBufferSize, sizeHint);
-            return adjustedToMaximumSize;
+            return Math.Min(maxBufferSize, sizeHint);
         }
         
         // Segment를 풀에서 꺼내오기(풀에 없으면 새로 만듦)
-        private BufferSegment CreateSegmentUnsynchronized()
+        private BufferSegment CreateSegment()
         {
-            if (this.bufferSegmentPool.TryPop(out var segment))
-            {
-                return segment;
-            }
-
-            return new BufferSegment();
+            return this.bufferSegmentPool.TryPop(out var segment) ? segment : new BufferSegment();
         }
         
         // 다 읽은 Segment를 풀로 반환하기
-        private void ReturnSegmentUnsynchronized(BufferSegment segment)
+        private void ReturnSegment(BufferSegment segment)
         {
             Debug.Assert(segment != this.readHead, "Returning _readHead segment that's in use!");
             Debug.Assert(segment != this.readTail, "Returning _readTail segment that's in use!");
@@ -206,13 +198,8 @@
                 this.bufferSegmentPool.Push(segment);
             }
         }
-
-        public bool Flush()
-        {
-            return CommitUnsynchronized();
-        }
-
-        internal bool CommitUnsynchronized()
+        
+        internal bool Flush()
         {
             this.operationState.EndWrite();
 
@@ -343,7 +330,7 @@
             {
                 var next = returnStart.NextSegment;
                 returnStart.ResetMemory();
-                this.ReturnSegmentUnsynchronized(returnStart);
+                this.ReturnSegment(returnStart);
                 returnStart = next;
             }
 
@@ -353,7 +340,7 @@
 
         private void MoveReturnEndToNextBlock(ref BufferSegment? returnEnd)
         {
-            BufferSegment? nextBlock = returnEnd!.NextSegment;
+            var nextBlock = returnEnd!.NextSegment;
             if (this.readTail == returnEnd)
             {
                 this.readTail = nextBlock;
@@ -370,7 +357,7 @@
         {
             var completed = this.isReaderCompleted;
 
-            this.CommitUnsynchronized();
+            this.Flush();
 
             if (this.isWriterCompleted == false)
             {

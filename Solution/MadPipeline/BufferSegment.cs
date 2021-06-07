@@ -1,10 +1,10 @@
-﻿namespace MadPipeline
-{
-    using System;
-    using System.Buffers;
-    using System.Diagnostics;
+﻿using System;
+using System.Buffers;
+using System.Diagnostics;
 
-    // BufferSegment는 파이프라인 참조하여 가져오려 했지만, 거기서 internal class라...
+namespace MadPipeline
+{
+    // BufferSegment는 파이프라인 참조하여 가져오려 했지만, 거기서 internal class라 불가했습니다..
     // ReadOnlySequenceSegment<T> 자체가 추상 클래스라 구현이 필요한데, 여기서 하는 것.
     internal sealed class BufferSegment : ReadOnlySequenceSegment<byte>
     {
@@ -58,7 +58,7 @@
 
         public void ResetMemory()
         {
-            IMemoryOwner<byte>? owner = memoryOwner;
+            var owner = memoryOwner;
             if (owner != null)
             {
                 memoryOwner = null;
