@@ -10,13 +10,13 @@
         [TestMethod]
         public void ReadTest()
         {
-            this.Madline.Writer.Write(new byte[] {1});
-            this.Madline.Writer.Write(new byte[] {2});
-            this.Madline.Writer.Write(new byte[] {3});
+            this.MadWriter.Write(new byte[] {1});
+            this.MadWriter.Write(new byte[] {2});
+            this.MadWriter.Write(new byte[] {3});
 
-            this.Madline.Writer.Flush();
+            this.MadWriter.Flush();
 
-            this.Madline.Reader.TryRead(out var result);
+            this.MadReader.TryRead(out var result);
             var data = result.Buffer.ToArray();
             // data는 {1, 2, 3} 이므로 다름
             CollectionAssert.AreNotEqual(new byte[] {1, 1, 1}, data);
@@ -24,7 +24,7 @@
 
             // Advance 전 : 3
             Assert.AreEqual(this.Madline.Length, 3);
-            this.Madline.Reader.Advance(result.Buffer.End);
+            this.MadReader.AdvanceTo(result.Buffer.End);
             // Advance 후 : 0
             Assert.AreEqual(this.Madline.Length, 0);
         }
@@ -35,29 +35,29 @@
         {
             var rawSource = new byte[] {1, 2, 3};
             // 다 쓴 경우 비교하게 읽기
-            this.Madline.Writer.TryWrite(rawSource);
-            this.Madline.Reader.TryRead(out var result);
+            this.MadWriter.TryWrite(rawSource);
+            this.MadReader.TryRead(out var result);
             var data = result.Buffer.ToArray();
             CollectionAssert.AreNotEqual(new byte[] {1, 1, 1}, data);
             CollectionAssert.AreEqual(new byte[] {1, 2, 3}, data);
 
-            this.Madline.Reader.Advance(result.Buffer.End);
+            this.MadReader.AdvanceTo(result.Buffer.End);
         }
 
         [TestMethod]
         public void MultipleWriteTest()
         {
             var rawSource = new byte[] {1, 2};
-            this.Madline.Writer.TryWrite(rawSource);
+            this.MadWriter.TryWrite(rawSource);
             rawSource = new byte[] {3, 4, 5, 6};
-            this.Madline.Writer.TryWrite(rawSource);
+            this.MadWriter.TryWrite(rawSource);
             rawSource = new byte[] {7, 8, 9};
-            this.Madline.Writer.TryWrite(rawSource);
-            this.Madline.Reader.TryRead(out var result);
+            this.MadWriter.TryWrite(rawSource);
+            this.MadReader.TryRead(out var result);
 
             byte[] data = result.Buffer.ToArray();
 
-            this.Madline.Reader.Advance(result.Buffer.End);
+            this.MadReader.AdvanceTo(result.Buffer.End);
 
             CollectionAssert.AreNotEqual(new byte[] {1, 1, 1, 1, 1, 1}, data);
             CollectionAssert.AreEqual(new byte[] {1, 2, 3, 4, 5, 6, 7, 8, 9}, data);
@@ -67,12 +67,12 @@
         [TestMethod]
         public void MultipleWriteButNotFlushedTest()
         {
-            this.Madline.Writer.Write(new byte[] { 1, 2 });
-            this.Madline.Writer.Write(new byte[] { 3, 4, 5, 6 });
-            this.Madline.Writer.Flush();
+            this.MadWriter.Write(new byte[] { 1, 2 });
+            this.MadWriter.Write(new byte[] { 3, 4, 5, 6 });
+            this.MadWriter.Flush();
             // 이건 Flush되지 않음
-            this.Madline.Writer.Write(new byte[] { 7, 8, 9 });
-            this.Madline.Reader.TryRead(out var result);
+            this.MadWriter.Write(new byte[] { 7, 8, 9 });
+            this.MadReader.TryRead(out var result);
             var data = result.Buffer.ToArray();
             CollectionAssert.AreNotEqual(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9 }, data);
             CollectionAssert.AreEqual(new byte[] {1, 2, 3, 4, 5, 6}, data);
@@ -81,15 +81,15 @@
         [TestMethod]
         public void CompleteAfterAdvanceCommits()
         {
-            this.Madline.Writer.WriteEmpty(4);
+            this.MadWriter.WriteEmpty(4);
 
-            this.Madline.Writer.Flush();
-            this.Madline.Writer.Complete();
+            this.MadWriter.Flush();
+            this.MadWriter.CompleteWriter();
 
-            this.Madline.Reader.TryRead(out var result);
+            this.MadReader.TryRead(out var result);
             Assert.AreEqual(4, result.Buffer.Length);
-            this.Madline.Reader.Advance(result.Buffer.End);
-            this.Madline.Reader.Complete();
+            this.MadReader.AdvanceTo(result.Buffer.End);
+            this.MadReader.CompleteReader();
         }
     }
 }

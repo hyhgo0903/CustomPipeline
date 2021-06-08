@@ -7,7 +7,6 @@
 
     public sealed partial class Madline
     {
-        // 타겟바이트 이 이하 쓰려고하면, 실패한다.
         public bool TryRead(out ReadResult result, int targetLength = -1)
         {
             if (this.isReaderCompleted)
@@ -32,7 +31,7 @@
             this.Callback.ReadPromise = promise;
             return promise.GetFuture();
         }
-
+        
         private void GetReadResult(out ReadResult result, int targetLength)
         {
             var isCompleted = this.isWriterCompleted;

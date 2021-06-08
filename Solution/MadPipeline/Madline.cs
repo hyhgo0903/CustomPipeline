@@ -1,10 +1,12 @@
-﻿namespace MadPipeline
+﻿using System.Threading;
+
+namespace MadPipeline
 {
     using System;
     using System.Buffers;
     using System.Diagnostics;
 
-    public sealed partial class Madline
+    public sealed partial class Madline : IMadlineReader, IMadlineWriter
     {
         // 4KB(DefaultMinimumSegmentSize == 4096)을 곱할 시 용량상 64(혹은 65?)KB
         public const int InitialSegmentPoolSize = 16;
@@ -61,15 +63,11 @@
             this.pauseWriterThreshold = options.PauseWriterThreshold;
             this.resumeWriterThreshold = options.ResumeWriterThreshold;
             this.targetBytes = options.TargetBytes;
-            this.Writer = new MadlineWriter(this);
-            this.Reader = new MadlineReader(this);
             this.Callback = new MadlineCallbacks();
         }
 
         public long Length => this.unconsumedBytes;
-
-        public MadlineReader Reader { get; }
-        public MadlineWriter Writer { get; }
+        
         public MadlineCallbacks Callback { get; }
 
         // 당장은 안 쓰고 있으나, 재사용을 위해 삭제하지는 않았음
@@ -199,7 +197,7 @@
             }
         }
         
-        internal bool Flush()
+        public bool Flush()
         {
             this.operationState.EndWrite();
 
@@ -245,8 +243,8 @@
 
             return false;
         }
-        
-        internal void Advance(int bytesWritten)
+
+        public void Advance(int bytesWritten)
         {
             if (this.isReaderCompleted)
             {
@@ -256,17 +254,13 @@
             this.writingHeadBytesBuffered += bytesWritten;
             this.writingHeadMemory = this.writingHeadMemory[bytesWritten..];
         }
-        internal void AdvanceReader(in SequencePosition consumed)
+        public void AdvanceTo(in SequencePosition consumed)
         {
-            this.AdvanceReader(consumed, consumed);
-        }
-        internal void AdvanceReader(in SequencePosition consumed, in SequencePosition examined)
-        {
-            this.AdvanceReader((BufferSegment?)consumed.GetObject(), consumed.GetInteger(),
-                (BufferSegment?)examined.GetObject(), examined.GetInteger());
+            this.AdvanceTo((BufferSegment?)consumed.GetObject(), consumed.GetInteger(),
+                (BufferSegment?)consumed.GetObject(), consumed.GetInteger());
         }
         
-        private void AdvanceReader(BufferSegment? consumedSegment, int consumedIndex, BufferSegment? examinedSegment, int examinedIndex)
+        private void AdvanceTo(BufferSegment? consumedSegment, int consumedIndex, BufferSegment? examinedSegment, int examinedIndex)
         {
             BufferSegment? returnStart = null;
             BufferSegment? returnEnd = null;
@@ -353,7 +347,7 @@
             returnEnd = nextBlock;
         }
 
-        internal void CompleteWriter()
+        public void CompleteWriter()
         {
             var completed = this.isReaderCompleted;
 
@@ -370,7 +364,7 @@
             }
         }
 
-        internal void CompleteReader()
+        public void CompleteReader()
         {
             var completed = this.isWriterCompleted;
 
@@ -388,7 +382,6 @@
             {
                 this.CompleteMadline();
             }
-
         }
 
         private void CompleteMadline()

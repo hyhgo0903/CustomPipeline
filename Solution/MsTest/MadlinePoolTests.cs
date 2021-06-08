@@ -19,12 +19,12 @@
             var madline = new Madline(new MadlineOptions(pool));
             while (pool.CurrentlyRentedBlocks != 3)
             {
-                var writableBuffer = madline.Writer.WriteEmpty(writeSize);
+                var writableBuffer = madline.WriteEmpty(writeSize);
                 writableBuffer.Flush();
             }
       
-            madline.Reader.TryRead(out var readResult);
-            madline.Reader.Advance(readResult.Buffer.End);
+            madline.TryRead(out var readResult);
+            madline.AdvanceTo(readResult.Buffer.End);
 
             Assert.AreEqual(0, pool.CurrentlyRentedBlocks);
             Assert.AreEqual(3, pool.DisposedBlocks);
@@ -40,14 +40,14 @@
             var madline = new Madline(new MadlineOptions(pool));
             while (pool.CurrentlyRentedBlocks != 3)
             {
-                MadlineWriter writableBuffer = madline.Writer.WriteEmpty(writeSize);
-                writableBuffer.Flush();
+                madline.WriteEmpty(writeSize);
+                madline.Flush();
             }
 
-            madline.Reader.TryRead(out var readResult);
-            madline.Writer.WriteEmpty(writeSize);
-            madline.Reader.Advance(readResult.Buffer.End);
-            madline.Writer.Flush();
+            madline.TryRead(out var readResult);
+            madline.WriteEmpty(writeSize);
+            madline.AdvanceTo(readResult.Buffer.End);
+            madline.Flush();
 
             Assert.AreEqual(1, pool.CurrentlyRentedBlocks);
             Assert.AreEqual(2, pool.DisposedBlocks);
@@ -63,20 +63,20 @@
             var madline = new Madline(new MadlineOptions(pool));
 
             // Write two blocks
-            var buffer = madline.Writer.GetMemory(writeSize);
-            madline.Writer.Advance(buffer.Length);
-            madline.Writer.GetMemory(buffer.Length);
-            madline.Writer.Advance(writeSize);
-            madline.Writer.Flush();
+            var buffer = madline.GetMemory(writeSize);
+            madline.Advance(buffer.Length);
+            madline.GetMemory(buffer.Length);
+            madline.Advance(writeSize);
+            madline.Flush();
 
             Assert.AreEqual(2, pool.CurrentlyRentedBlocks);
 
             // DoRead everything
-            madline.Reader.TryRead(out var readResult);
-            madline.Reader.Advance(readResult.Buffer.End);
+            madline.TryRead(out var readResult);
+            madline.AdvanceTo(readResult.Buffer.End);
 
             // Try writing more
-            madline.Writer.TryWrite(new byte[writeSize]);
+            madline.TryWrite(new byte[writeSize]);
 
             Assert.AreEqual(1, pool.CurrentlyRentedBlocks);
             Assert.AreEqual(2, pool.DisposedBlocks);
@@ -88,14 +88,14 @@
             var pool = new DisposeTrackingBufferPool();
 
             var madline = new Madline(new MadlineOptions(pool));
-            madline.Writer.TryWrite(new byte[] { 1 });
+            madline.TryWrite(new byte[] { 1 });
 
-            madline.Writer.Complete();
-            madline.Reader.Complete();
+            madline.CompleteWriter();
+            madline.CompleteReader();
             Assert.AreEqual(1, pool.DisposedBlocks);
 
-            madline.Writer.Complete();
-            madline.Reader.Complete();
+            madline.CompleteWriter();
+            madline.CompleteReader();
             Assert.AreEqual(1, pool.DisposedBlocks);
         }
 
@@ -107,15 +107,15 @@
 
             var madline = new Madline(new MadlineOptions(pool, minimumSegmentSize: 2020));
 
-            Memory<byte> buffer = madline.Writer.GetMemory(writeSize);
+            Memory<byte> buffer = madline.GetMemory(writeSize);
             int allocatedSize = buffer.Length;
-            madline.Writer.Advance(buffer.Length);
-            buffer = madline.Writer.GetMemory(1);
+            madline.Advance(buffer.Length);
+            buffer = madline.GetMemory(1);
             int ensuredSize = buffer.Length;
-            madline.Writer.Flush();
+            madline.Flush();
 
-            madline.Reader.Complete();
-            madline.Writer.Complete();
+            madline.CompleteReader();
+            madline.CompleteWriter();
 
             Assert.AreEqual(2020, ensuredSize);
             Assert.AreEqual(2020, allocatedSize);
@@ -126,10 +126,10 @@
         {
             var pool = new DisposeTrackingBufferPool();
             var madline = new Madline(new MadlineOptions(pool));
-            madline.Writer.GetMemory(512);
+            madline.GetMemory(512);
 
-            madline.Reader.Complete();
-            madline.Writer.Complete();
+            madline.CompleteReader();
+            madline.CompleteWriter();
             Assert.AreEqual(0, pool.CurrentlyRentedBlocks);
             Assert.AreEqual(1, pool.DisposedBlocks);
         }
@@ -142,11 +142,11 @@
                 minimumSegmentSize: 2048);
 
             var madline = new Madline(options);
-            madline.Writer.GetMemory(512);
-            madline.Writer.GetMemory(4096);
+            madline.GetMemory(512);
+            madline.GetMemory(4096);
 
-            madline.Reader.Complete();
-            madline.Writer.Complete();
+            madline.CompleteReader();
+            madline.CompleteWriter();
             Assert.AreEqual(0, pool.CurrentlyRentedBlocks);
             Assert.AreEqual(2, pool.DisposedBlocks);
         }
@@ -159,15 +159,15 @@
             const int writeSize = 512;
 
             var madline = new Madline(new MadlineOptions(pool));
-            madline.Writer.TryWrite(new byte[writeSize]);
+            madline.TryWrite(new byte[writeSize]);
 
-            madline.Writer.GetMemory(writeSize);
+            madline.GetMemory(writeSize);
 
-            madline.Reader.TryRead(out var readResult);
+            madline.TryRead(out var readResult);
       
-            madline.Reader.Advance(readResult.Buffer.End);
-            madline.Writer.Write(new byte[writeSize]);
-            madline.Writer.Flush();
+            madline.AdvanceTo(readResult.Buffer.End);
+            madline.Write(new byte[writeSize]);
+            madline.Flush();
 
             Assert.AreEqual(1, pool.CurrentlyRentedBlocks);
         }
@@ -178,12 +178,12 @@
             var pool = new DisposeTrackingBufferPool();
 
             var madline = new Madline(new MadlineOptions(pool));
-            madline.Writer.TryWrite(new byte[1]);
+            madline.TryWrite(new byte[1]);
 
             Assert.AreEqual(1, pool.CurrentlyRentedBlocks);
 
-            madline.Reader.Complete();
-            madline.Writer.Complete();
+            madline.CompleteReader();
+            madline.CompleteWriter();
         }
 
         [TestMethod]
@@ -192,13 +192,13 @@
             var pool = new DisposeTrackingBufferPool();
 
             var madline = new Madline(new MadlineOptions(pool));
-            madline.Writer.TryWrite(new byte[1]);
+            madline.TryWrite(new byte[1]);
 
             Assert.AreEqual(1, pool.CurrentlyRentedBlocks);
 
 
-            madline.Writer.Complete();
-            madline.Reader.Complete();
+            madline.CompleteReader();
+            madline.CompleteWriter();
         }
   
     }

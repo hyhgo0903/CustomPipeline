@@ -16,10 +16,10 @@
         {
             ++this.writeProcessPassed;
             var received = Encoding.ASCII.GetBytes("Hello World!");
-            if (this.Madline.Writer.TryWrite(received) == false)
+            if (this.MadWriter.TryWrite(received) == false)
             {
                 // TryWrite에 실패한다면 이 함수를 액션으로 예약
-                this.Madline.Writer.DoWrite().OnCompleted(
+                this.MadWriter.DoWrite().OnCompleted(
                     () =>
                     {
                         this.WriteProcess();
@@ -30,18 +30,18 @@
         public void ReadProcess()
         {
             ++this.readProcessPassed;
-            if (this.Madline.Reader.TryRead(out var result))
+            if (this.MadReader.TryRead(out var result))
             {
                 // TryWrite에 성공했을때 result를 이용한 작업을 여기서
                 Assert.AreNotEqual("Hell World!", Encoding.ASCII.GetString(result.Buffer.ToArray()));
                 Assert.AreEqual("Hello World!", Encoding.ASCII.GetString(result.Buffer.ToArray()));
                 Assert.AreEqual(12, result.Buffer.Length);
-                this.Madline.Reader.Advance(result.Buffer.End);
+                this.MadReader.AdvanceTo(result.Buffer.End);
             }
             else
             {
                 // TryWrite에 실패한다면 이 함수를 액션으로 예약
-                this.Madline.Reader.DoRead().Then(
+                this.MadReader.DoRead().Then(
                     readResult =>
                     {
                         Assert.AreEqual(12, readResult.Buffer.Length);
@@ -67,16 +67,16 @@
         public void ReadTwiceWrittenProcess()
         {
             ++this.readProcessPassed;
-            if (this.Madline.Reader.TryRead(out var result))
+            if (this.MadReader.TryRead(out var result))
             {
                 Assert.AreNotEqual("Hello World!", Encoding.ASCII.GetString(result.Buffer.ToArray()));
                 Assert.AreEqual("Hello World!Hello World!", Encoding.ASCII.GetString(result.Buffer.ToArray()));
                 Assert.AreEqual(24, result.Buffer.Length);
-                this.Madline.Reader.Advance(result.Buffer.End);
+                this.MadReader.AdvanceTo(result.Buffer.End);
             }
             else
             {
-                this.Madline.Reader.DoRead().Then(
+                this.MadReader.DoRead().Then(
                     readResult =>
                     {
                         Assert.AreEqual(24, readResult.Buffer.Length);
@@ -89,15 +89,15 @@
         public void WriteWhenBufferIsFullTest()
         {
             // 확장 메서드를 이용하여 더미 데이터로 가득 채움
-            this.Madline.Writer.WriteEmpty(MaximumSizeHigh);
-            this.Madline.Writer.Flush();
+            this.MadWriter.WriteEmpty(MaximumSizeHigh);
+            this.MadWriter.Flush();
 
             // 빈 데이터로 채웠으므로 이땐 TryWrite가 false가 되며, Write가 예약된다.
             this.WriteProcess();
 
-            this.Madline.TryRead(out var buffer);
+            this.MadReader.TryRead(out var buffer);
             // Advance되며 예약된 시그널(쓰기 프로세스 다시 발동) Set됨
-            this.Madline.Reader.Advance(buffer.Buffer.End);
+            this.MadReader.AdvanceTo(buffer.Buffer.End);
 
             this.ReadProcess();
 
@@ -114,14 +114,14 @@
                 this.WriteProcess();
             }
             
-            this.Madline.TryRead(out var result);
+            this.MadReader.TryRead(out var result);
 
             // PauseThreshold를 넘으면 더 이상 받을 수 없음
             // 이것을 넘어가는 쓰기는 예약이 된다. (하나까지만)
             Assert.IsTrue(result.Buffer.Length <= MaximumSizeHigh + 12);
 
             // Advance 과정에서 예약된 쓰기가 한 번 호출된다.
-            this.Madline.Reader.Advance(result.Buffer.End);
+            this.MadReader.AdvanceTo(result.Buffer.End);
             // 예약된 쓰기작업 구문 분석(TryRead)
             this.ReadProcess();
 
@@ -175,9 +175,9 @@
             ++this.writeProcessPassed;
             var received = Encoding.ASCII.GetBytes("Hello World!");
             // 타겟바이트가 기록되는 데이터보다 크도록 설정
-            if (this.Madline.Writer.TryWrite(received, 20) == false)
+            if (this.MadWriter.TryWrite(received, 20) == false)
             {
-                this.Madline.Writer.DoWrite().OnCompleted(
+                this.MadWriter.DoWrite().OnCompleted(
                     () =>
                     {
                         this.WriteProcessWithTargetBytes();
@@ -190,21 +190,21 @@
         {
             this.WriteProcess();
 
-            // 5 길이만 읽게끔
-            this.Madline.Reader.TryRead(out var result, 6);
+            // 6 길이만 읽게끔
+            this.MadReader.TryRead(out var result, 6);
             Assert.AreNotEqual("Hello World!", Encoding.ASCII.GetString(result.Buffer.ToArray()));
             Assert.AreEqual("Hello ", Encoding.ASCII.GetString(result.Buffer.ToArray()));
-            this.Madline.Reader.Advance(result.Buffer.End);
+            this.MadReader.AdvanceTo(result.Buffer.End);
 
             this.WriteProcess();
 
-            this.Madline.Reader.TryRead(out var result2, 10);
+            this.MadReader.TryRead(out var result2, 10);
             Assert.AreEqual("World!Hell", Encoding.ASCII.GetString(result2.Buffer.ToArray()));
-            this.Madline.Reader.Advance(result2.Buffer.End);
+            this.MadReader.AdvanceTo(result2.Buffer.End);
 
-            this.Madline.Reader.TryRead(out var result3);
+            this.MadReader.TryRead(out var result3);
             Assert.AreEqual("o World!", Encoding.ASCII.GetString(result3.Buffer.ToArray()));
-            this.Madline.Reader.Advance(result3.Buffer.End);
+            this.MadReader.AdvanceTo(result3.Buffer.End);
         }
 
     }

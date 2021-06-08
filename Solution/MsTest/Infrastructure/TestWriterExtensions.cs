@@ -4,11 +4,11 @@
 
     public static class TestWriterExtensions
     {
-        public static MadlineWriter WriteEmpty(this MadlineWriter writer, int count)
+        public static IMadlineWriter WriteEmpty(this IMadlineWriter madline, int count)
         {
-            writer.GetSpan(count)[..count].Clear();
-            writer.Advance(count);
-            return writer;
+            madline.GetSpan(count)[..count].Clear();
+            madline.Advance(count);
+            return madline;
         }
     }
 }
