@@ -1,4 +1,5 @@
 ﻿using System.Threading;
+using MadPipeline.MadngineSource;
 
 namespace MadPipeline
 {
@@ -6,7 +7,7 @@ namespace MadPipeline
     using System.Buffers;
     using System.Diagnostics;
 
-    public sealed partial class Madline : IMadlineReader, IMadlineWriter
+    public sealed class Madline : IMadlineReader, IMadlineWriter
     {
         // 4KB(DefaultMinimumSegmentSize == 4096)을 곱할 시 용량상 64(혹은 65?)KB
         public const int InitialSegmentPoolSize = 16;
@@ -45,6 +46,8 @@ namespace MadPipeline
         // Flush()가 차단을 중지할 때 Pipe의 바이트 수
         private readonly long resumeWriterThreshold;
 
+        private readonly object sync;
+
         // 버퍼 메모리풀 관리 기존 파이프라인대로 운용
         private BufferSegmentStack bufferSegmentPool;
 
@@ -64,6 +67,7 @@ namespace MadPipeline
             this.resumeWriterThreshold = options.ResumeWriterThreshold;
             this.targetBytes = options.TargetBytes;
             this.Callback = new MadlineCallbacks();
+            this.sync = new object();
         }
 
         public long Length => this.unconsumedBytes;
@@ -82,7 +86,10 @@ namespace MadPipeline
             this.notFlushedBytes = 0;
             this.unconsumedBytes = 0;
         }
-        
+
+        #region BufferManagement
+
+
         // 할당
         public Memory<byte> GetMemory(int sizeHint)
         {
@@ -196,54 +203,11 @@ namespace MadPipeline
                 this.bufferSegmentPool.Push(segment);
             }
         }
+
+        #endregion
+
+        #region Advance
         
-        public bool Flush()
-        {
-            this.operationState.EndWrite();
-
-            if (this.notFlushedBytes == 0)
-            {
-                // 커밋할 데이터가 써져있지 않음
-                return true;
-            }
-            
-            // writingHead 업데이트
-            Debug.Assert(this.writingHead != null);
-            this.writingHead.End += this.writingHeadBytesBuffered;
-
-            // 항상 readTail를 writeHead로 이동시킨다.
-            this.readTail = this.writingHead;
-            this.readTailIndex = this.writingHead.End;
-
-            var oldLength = this.unconsumedBytes;
-            this.unconsumedBytes += this.notFlushedBytes;
-
-            // 리더가 complete 된거면 리셋 안 함
-            if (this.pauseWriterThreshold > 0 &&
-                oldLength < this.pauseWriterThreshold &&
-                this.unconsumedBytes >= this.pauseWriterThreshold &&
-                !this.isReaderCompleted)
-            {
-                this.operationState.PauseWrite();
-            }
-
-            this.notFlushedBytes = 0;
-            this.writingHeadBytesBuffered = 0;
-
-            if (unconsumedBytes >= this.targetBytes && this.readHead != null)
-            {
-                var readOnlySequence = new ReadOnlySequence<byte>(this.readHead,
-                    this.readHeadIndex,
-                    this.readTail,
-                    this.readTailIndex);
-                var result = new ReadResult(readOnlySequence, this.isWriterCompleted);
-
-                this.Callback.ReadPromise.Complete(result);
-            }
-
-            return false;
-        }
-
         public void Advance(int bytesWritten)
         {
             if (this.isReaderCompleted)
@@ -254,17 +218,17 @@ namespace MadPipeline
             this.writingHeadBytesBuffered += bytesWritten;
             this.writingHeadMemory = this.writingHeadMemory[bytesWritten..];
         }
+
         public void AdvanceTo(in SequencePosition consumed)
         {
-            this.AdvanceTo((BufferSegment?)consumed.GetObject(), consumed.GetInteger(),
-                (BufferSegment?)consumed.GetObject(), consumed.GetInteger());
-        }
-        
-        private void AdvanceTo(BufferSegment? consumedSegment, int consumedIndex, BufferSegment? examinedSegment, int examinedIndex)
-        {
+            var consumedSegment = (BufferSegment?) consumed.GetObject();
+            var consumedIndex = consumed.GetInteger();
+            var examinedSegment = (BufferSegment?) consumed.GetObject();
+            var examinedIndex = consumed.GetInteger();
+            
             BufferSegment? returnStart = null;
             BufferSegment? returnEnd = null;
-            
+
             if (examinedSegment != null && this.lastExaminedIndex >= 0)
             {
                 var examinedBytes = BufferSegment.GetLength(this.lastExaminedIndex, examinedSegment, examinedIndex);
@@ -289,7 +253,7 @@ namespace MadPipeline
 
                 returnStart = this.readHead;
                 returnEnd = consumedSegment;
-                
+
                 if (consumedIndex == returnEnd.Length)
                 {
                     if (this.writingHead != returnEnd)
@@ -317,9 +281,9 @@ namespace MadPipeline
                     this.readHead = consumedSegment;
                     this.readHeadIndex = consumedIndex;
                 }
-                
+
             }
-            
+
             while (returnStart != null && returnStart != returnEnd)
             {
                 var next = returnStart.NextSegment;
@@ -346,6 +310,11 @@ namespace MadPipeline
 
             returnEnd = nextBlock;
         }
+
+
+        #endregion
+
+        #region Complete
 
         public void CompleteWriter()
         {
@@ -407,12 +376,209 @@ namespace MadPipeline
             this.readTail = null;
             this.lastExaminedIndex = -1;
         }
+
+        #endregion
+
+        #region Write
+
+        public bool TryWrite(in ReadOnlyMemory<byte> source)
+        {
+            // unconsumedBytes가 PauseWriterThreshold를 넘고있는 경우임
+            if (this.operationState.IsWritingPaused)
+            {
+                return false;
+            }
+            if (this.isWriterCompleted)
+            {
+                throw new Exception("No Writing Allowed");
+            }
+
+            DoWrite(in source, true);
+
+            return true;
+        }
+
+        public Signal DoWrite(in ReadOnlyMemory<byte> source, bool execute = false)
+        {
+            if (execute)
+            {
+                this.AllocateWriteHeadIfNeeded(0);
+
+                if (source.Length <= this.writingHeadMemory.Length)
+                {
+                    // 세그먼트 하나에 쓰는 경우
+                    source.CopyTo(this.writingHeadMemory);
+
+                    this.Advance(source.Length);
+                }
+                else
+                {
+                    // 세그먼트를 넘어가며 써야하는 경우
+                    Debug.Assert(this.writingHead != null);
+                    var sourceSpan = source.Span;
+                    var destination = this.writingHeadMemory.Span;
+
+                    while (true)
+                    {
+                        var writable = Math.Min(destination.Length, sourceSpan.Length);
+                        sourceSpan[..writable].CopyTo(destination);
+                        sourceSpan = sourceSpan[writable..];
+                        this.Advance(writable);
+
+                        if (sourceSpan.Length == 0)
+                        {
+                            break;
+                        }
+
+                        // We filled the segment
+                        this.writingHead.End += writable;
+                        this.writingHeadBytesBuffered = 0;
+
+                        // This is optimized to use pooled memory. That's why we pass 0 instead of
+                        // source.Length
+                        BufferSegment newSegment = this.AllocateSegment(0);
+
+                        this.writingHead.SetNext(newSegment);
+                        this.writingHead = newSegment;
+
+                        destination = this.writingHeadMemory.Span;
+                    }
+                }
+
+                this.Flush();
+            }
+            else
+            {
+                this.Callback.WriteSignal.Reset();
+            }
+            return this.Callback.WriteSignal;
+        }
+
+        #endregion
+
+        #region Read
+
+        // 변수로 넣는 targetLength는 DecodingFramer로 헤더 분석 후 사이즈 전달은 인자를 넣는다고 가정
+        public bool TryRead(out ReadResult result, int targetLength)
+        {
+            if (this.isReaderCompleted)
+            {
+                throw new Exception("Reader is Completed");
+            }
+
+            this.targetBytes = targetLength;
+
+            // 이 이하면 예약을 (더 들어와야 함)
+            if (this.unconsumedBytes < targetLength)
+            {
+                result = default;
+                return false;
+            }
+
+            if (this.unconsumedBytes > 0)
+            {
+                this.DoRead(out result, targetLength, true);
+                return true;
+            }
+
+            result = default;
+            return false;
+        }
+
+        // 실제로 쓰는 부분이 이쪽으로 와야 한다.
+        public Future<ReadResult> DoRead(out ReadResult result, int targetLength, bool execute = false)
+        {
+            if (execute)
+            {
+                // 이때는 targetBytes는 Try에서 이미 입력됐으므로 생략
+                this.GetReadResult(out result);
+            }
+            else
+            {
+                this.targetBytes = targetLength;
+                var promise = new Promise<ReadResult>();
+                this.Callback.ReadPromise = promise;
+                result = default;
+            }
+            return this.Callback.ReadPromise.GetFuture();
+        }
+
+        private void GetReadResult(out ReadResult result)
+        {
+            var isCompleted = this.isWriterCompleted;
+            var head = this.readHead;
+            if (head != null)
+            {
+                Debug.Assert(this.readTail != null);
+                // Reading commit head shared with writer
+
+                var readOnlySequence = new ReadOnlySequence<byte>(head,
+                    this.readHeadIndex,
+                    this.readTail,
+                    this.readTailIndex);
+                result = new ReadResult(readOnlySequence, isCompleted);
+            }
+            else
+            {
+                result = new ReadResult(default, isCompleted);
+            }
+
+            this.operationState.BeginRead();
+        }
+
+        #endregion
+        
+        public bool Flush()
+        {
+            this.operationState.EndWrite();
+
+            if (this.notFlushedBytes == 0)
+            {
+                // 커밋할 데이터가 써져있지 않음
+                return true;
+            }
+
+            // writingHead 업데이트
+            Debug.Assert(this.writingHead != null);
+            this.writingHead.End += this.writingHeadBytesBuffered;
+
+            // 항상 readTail를 writeHead로 이동시킨다.
+            this.readTail = this.writingHead;
+            this.readTailIndex = this.writingHead.End;
+
+            var oldLength = this.unconsumedBytes;
+            this.unconsumedBytes += this.notFlushedBytes;
+
+            if (this.pauseWriterThreshold > 0 &&
+                oldLength < this.pauseWriterThreshold &&
+                this.unconsumedBytes >= this.pauseWriterThreshold &&
+                !this.isReaderCompleted)
+            {
+                this.operationState.PauseWrite();
+            }
+
+            this.notFlushedBytes = 0;
+            this.writingHeadBytesBuffered = 0;
+
+            // 타겟바이트 이상으로 들어온 경우 예약된 읽기명령
+            if (unconsumedBytes >= this.targetBytes && this.readHead != null)
+            {
+                var readOnlySequence = new ReadOnlySequence<byte>(this.readHead,
+                    this.readHeadIndex,
+                    this.readTail,
+                    this.readTailIndex);
+                var result = new ReadResult(readOnlySequence, this.isWriterCompleted);
+
+                this.Callback.ReadPromise.Complete(result);
+            }
+
+            return false;
+        }
         
         public void Reset()
         {
             this.disposed = false;
             this.ResetState();
         }
-        
     }
 }

@@ -1,6 +1,6 @@
 ﻿namespace MadPipeline
 {
-    using MadPipeline.MadngineSource;
+    using MadngineSource;
 
     public sealed class MadlineCallbacks
     {

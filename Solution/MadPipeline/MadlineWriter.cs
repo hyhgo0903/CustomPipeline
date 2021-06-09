@@ -7,8 +7,8 @@
     public interface IMadlineWriter : IBufferWriter<byte>
     {
         public void CompleteWriter();
-        public bool TryWrite(ReadOnlyMemory<byte> source, int targetBytes = -1);
-        public Signal DoWrite();
+        public bool TryWrite(in ReadOnlyMemory<byte> source);
+        public Signal DoWrite(in ReadOnlyMemory<byte> source, bool execute = false);
         public bool Flush();
     }
 }

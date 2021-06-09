@@ -12,8 +12,8 @@
         private readonly TestMemoryPool pool;
 
         protected Madline Madline { get; }
-        protected IMadlineWriter MadWriter { get; }
-        protected IMadlineReader MadReader { get; }
+        protected IMadlineWriter MadWriter => Madline;
+        protected IMadlineReader MadReader => Madline;
 
         protected MadlineTest(int pauseWriterThreshold = MaximumSizeHigh, int resumeWriterThreshold = MaximumSizeLow)
         {
@@ -24,14 +24,12 @@
                     pauseWriterThreshold,
                     resumeWriterThreshold
                 ));
-            this.MadWriter = Madline;
-            this.MadReader = Madline;
         }
         
         public void Dispose()
         {
-            this.Madline.CompleteWriter();
-            this.Madline.CompleteReader();
+            this.MadWriter.CompleteWriter();
+            this.MadReader.CompleteReader();
             this.pool.Dispose();
         }
     }
