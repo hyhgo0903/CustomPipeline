@@ -23,7 +23,7 @@
                 writableBuffer.Flush();
             }
       
-            madline.TryRead(out var readResult, 0);
+            madline.TryRead(out var readResult, (int)madline.Length);
             madline.AdvanceTo(readResult.Buffer.End);
 
             Assert.AreEqual(0, pool.CurrentlyRentedBlocks);
@@ -44,7 +44,7 @@
                 madline.Flush();
             }
 
-            madline.TryRead(out var readResult, 0);
+            madline.TryRead(out var readResult, (int)madline.Length);
             madline.WriteEmpty(writeSize);
             madline.AdvanceTo(readResult.Buffer.End);
             madline.Flush();
@@ -72,7 +72,7 @@
             Assert.AreEqual(2, pool.CurrentlyRentedBlocks);
 
             // DoRead everything
-            madline.TryRead(out var readResult, 0);
+            madline.TryRead(out var readResult, (int)madline.Length);
             madline.AdvanceTo(readResult.Buffer.End);
 
             // Try writing more

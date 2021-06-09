@@ -16,7 +16,7 @@
 
             this.MadWriter.Flush();
 
-            this.MadReader.TryRead(out var result, 0);
+            this.MadReader.TryRead(out var result, 3);
             var data = result.Buffer.ToArray();
             // data는 {1, 2, 3} 이므로 다름
             CollectionAssert.AreNotEqual(new byte[] {1, 1, 1}, data);
@@ -36,7 +36,7 @@
             var rawSource = new byte[] {1, 2, 3};
             // 다 쓴 경우 비교하게 읽기
             this.MadWriter.TryWrite(rawSource);
-            this.MadReader.TryRead(out var result, 0);
+            this.MadReader.TryRead(out var result, 3);
             var data = result.Buffer.ToArray();
             CollectionAssert.AreNotEqual(new byte[] {1, 1, 1}, data);
             CollectionAssert.AreEqual(new byte[] {1, 2, 3}, data);
@@ -53,7 +53,7 @@
             this.MadWriter.TryWrite(rawSource);
             rawSource = new byte[] {7, 8, 9};
             this.MadWriter.TryWrite(rawSource);
-            this.MadReader.TryRead(out var result, 0);
+            this.MadReader.TryRead(out var result, 9);
 
             byte[] data = result.Buffer.ToArray();
 
@@ -72,7 +72,7 @@
             this.MadWriter.Flush();
             // 이건 Flush되지 않음
             this.MadWriter.Write(new byte[] { 7, 8, 9 });
-            this.MadReader.TryRead(out var result, 0);
+            this.MadReader.TryRead(out var result, 6);
             var data = result.Buffer.ToArray();
             CollectionAssert.AreNotEqual(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9 }, data);
             CollectionAssert.AreEqual(new byte[] {1, 2, 3, 4, 5, 6}, data);
@@ -86,7 +86,7 @@
             this.MadWriter.Flush();
             this.MadWriter.CompleteWriter();
 
-            this.MadReader.TryRead(out var result, 0);
+            this.MadReader.TryRead(out var result, 4);
             Assert.AreEqual(4, result.Buffer.Length);
             this.MadReader.AdvanceTo(result.Buffer.End);
             this.MadReader.CompleteReader();

@@ -74,18 +74,6 @@ namespace MadPipeline
         
         public MadlineCallbacks Callback { get; }
 
-        // 당장은 안 쓰고 있으나, 재사용을 위해 삭제하지는 않았음
-        public void ResetState()
-        {
-            this.operationState = default;
-            this.isWriterCompleted = false;
-            this.isReaderCompleted = false;
-            this.readTailIndex = 0;
-            this.readHeadIndex = 0;
-            this.lastExaminedIndex = -1;
-            this.notFlushedBytes = 0;
-            this.unconsumedBytes = 0;
-        }
 
         #region BufferManagement
 
@@ -465,10 +453,8 @@ namespace MadPipeline
             {
                 throw new Exception("Reader is Completed");
             }
-
-            this.targetBytes = targetLength;
-
-            // 이 이하면 예약을 (더 들어와야 함)
+            
+            // 이 이하면 예약 (더 들어와야 함)
             if (this.unconsumedBytes < targetLength)
             {
                 result = default;
@@ -484,14 +470,14 @@ namespace MadPipeline
             result = default;
             return false;
         }
-
-        // 실제로 쓰는 부분이 이쪽으로 와야 한다.
+        
         public Future<ReadResult> DoRead(out ReadResult result, int targetLength, bool execute = false)
         {
+            
             if (execute)
             {
-                // 이때는 targetBytes는 Try에서 이미 입력됐으므로 생략
-                this.GetReadResult(out result);
+                this.GetReadResult(out result, targetLength);
+                this.targetBytes = 0;
             }
             else
             {
@@ -503,7 +489,7 @@ namespace MadPipeline
             return this.Callback.ReadPromise.GetFuture();
         }
 
-        private void GetReadResult(out ReadResult result)
+        private void GetReadResult(out ReadResult result, int targetLength)
         {
             var isCompleted = this.isWriterCompleted;
             var head = this.readHead;
@@ -512,10 +498,21 @@ namespace MadPipeline
                 Debug.Assert(this.readTail != null);
                 // Reading commit head shared with writer
 
+                // ToDo 타겟바이트만큼 잘라서 그 정도만 제공할지 정해야함
+
+                // 그냥 버전(항상 readTail 끝까지)
+                //var readOnlySequence = new ReadOnlySequence<byte>(head,
+                //    this.readHeadIndex,
+                //    this.readTail,
+                //    this.readTailIndex);
+
+                // 잘라서 제공하는 버전
                 var readOnlySequence = new ReadOnlySequence<byte>(head,
                     this.readHeadIndex,
                     this.readTail,
-                    this.readTailIndex);
+                    this.readTailIndex)
+                    .Slice(0, targetLength);
+                
                 result = new ReadResult(readOnlySequence, isCompleted);
             }
             else
@@ -527,7 +524,32 @@ namespace MadPipeline
         }
 
         #endregion
-        
+
+        #region Reset
+
+        // 당장은 안 쓰고 있으나, 재사용을 위해 삭제하지는 않았음
+        public void Reset()
+        {
+            lock (sync)
+            {
+                this.disposed = false;
+                this.ResetState();
+            }
+        }
+        private void ResetState()
+        {
+            this.operationState = default;
+            this.isWriterCompleted = false;
+            this.isReaderCompleted = false;
+            this.readTailIndex = 0;
+            this.readHeadIndex = 0;
+            this.lastExaminedIndex = -1;
+            this.notFlushedBytes = 0;
+            this.unconsumedBytes = 0;
+        }
+
+        #endregion
+
         public bool Flush()
         {
             this.operationState.EndWrite();
@@ -560,25 +582,16 @@ namespace MadPipeline
             this.notFlushedBytes = 0;
             this.writingHeadBytesBuffered = 0;
 
-            // 타겟바이트 이상으로 들어온 경우 예약된 읽기명령
-            if (unconsumedBytes >= this.targetBytes && this.readHead != null)
+            // 타겟바이트 이상으로 들어온 경우 예약된 읽기명령을 실행
+            if (this.unconsumedBytes >= this.targetBytes
+                && this.readHead != null)
             {
-                var readOnlySequence = new ReadOnlySequence<byte>(this.readHead,
-                    this.readHeadIndex,
-                    this.readTail,
-                    this.readTailIndex);
-                var result = new ReadResult(readOnlySequence, this.isWriterCompleted);
-
+                this.GetReadResult(out var result, this.targetBytes);
                 this.Callback.ReadPromise.Complete(result);
             }
 
             return false;
         }
-        
-        public void Reset()
-        {
-            this.disposed = false;
-            this.ResetState();
-        }
+
     }
 }
