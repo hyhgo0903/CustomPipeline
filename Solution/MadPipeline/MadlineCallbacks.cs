@@ -14,7 +14,7 @@
         public Signal WriteSignal { get; }
 
         // Promise 꼬이는거 방지해서 일단 마련 (signal은 프로퍼티 불러서 수동으로 Reset호출)
-        public Promise<ReadResult> ResetReadPromise()
+        public Promise<ReadResult> NewReadPromise()
         {
             this.ReadPromise = new Promise<ReadResult>();
             return this.ReadPromise;

@@ -1,34 +1,28 @@
-﻿//using System.Net;
-
-//namespace Tests
+﻿//namespace Tests
 //{
-//    using MadPipeline;
 //    using Microsoft.VisualStudio.TestTools.UnitTesting;
 //    using System.Net.Sockets;
 
 //    [TestClass]
-//    public sealed class SocketReceiveTest
+//    public sealed class ReceiveFromSocketTests : MadlineTest
 //    {
-//        private readonly Socket socket;
-//        private readonly SocketAsyncEventArgs receiveArgs;
-//        private readonly Madline madline;
+//        private readonly Socket listenSocket;
+//        private readonly Socket cl
 
-//        public SocketReceiveTest()
+//        public ReceiveFromSocketTests()
 //        {
 //            this.socket = new Socket(SocketType.Stream, ProtocolType.Tcp);
-//            this.socket.Bind(new IPEndPoint(IPAddress.Loopback, 12333));
-//            this.receiveArgs = new SocketAsyncEventArgs();
-//            var options = new MadlineOptions();
-//            this.madline = new Madline(options);
 //        }
 
-//        public void ReceiveProcess()
+//        [TestMethod]
+//        public void GetMemoryFromSocketTest()
 //        {
-//            var memory = this.madline.GetMemory(1);
-//            this.receiveArgs.SetBuffer(memory);
+
 //        }
 
-//        public void ProcessReceive1()
+        
+//        // ...
+//        public ProcessReceive1()
 //        {
 //            var memory = this.pipeline.GetMemory(1);
 //            this.receiveArgs.SetBuffer = memory;
@@ -40,7 +34,7 @@
 //                this.ProcessReceive();
 //            })
 //        }
-//        public void ProcessReceive2()
+//        public ProcessReceive2()
 //        {
 //            var memory = this.pipeline.GetMemory(1);
 //            this.receiveArgs.SetBuffer = memory;
@@ -59,7 +53,7 @@
 //                this.ProcessReceive2();
 //            }
 //        }
-//        public void ProcessSend()
+//        public ProcessSend()
 //        {
 //            if (this.pipeline.TryRead(var result, size))
 //            {
@@ -67,7 +61,7 @@
 //            }
 //            else
 //            {
-//                this.pipeline.DoRead(size)
+//                this.pipeline.Read(size)
 //                    .Then(result =>
 //                    {
 //                        this.SendToSocket(result.Buffer);

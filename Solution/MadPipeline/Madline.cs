@@ -89,27 +89,25 @@ namespace MadPipeline
             {
                 sizeHint = 0;
             }
-            this.AllocateWriteHeadIfNeeded(sizeHint);
+            this.AllocateWriteHead(sizeHint);
             return this.writingHeadMemory;
         }
 
         public Span<byte> GetSpan(int sizeHint)
         {
-            this.AllocateWriteHeadIfNeeded(sizeHint);
+            this.AllocateWriteHead(sizeHint);
 
             return this.writingHeadMemory.Span;
         }
         
-        private void AllocateWriteHeadIfNeeded(int sizeHint)
+        private void AllocateWriteHead(int sizeHint)
         {
-            if (!this.operationState.IsWritingActive ||
-                this.writingHeadMemory.Length == 0 || this.writingHeadMemory.Length < sizeHint)
+            if (this.operationState.IsWritingActive && this.writingHeadMemory.Length != 0 &&
+                this.writingHeadMemory.Length >= sizeHint)
             {
-                this.AllocateWriteHeadSynchronized(sizeHint);
+                return;
             }
-        }
-        private void AllocateWriteHeadSynchronized(int sizeHint)
-        {
+
             this.operationState.BeginWrite();
 
             // 이럴 경우는 어떤 경우일지 생각해볼 것
@@ -126,20 +124,22 @@ namespace MadPipeline
             {
                 var bytesLeftInBuffer = this.writingHeadMemory.Length;
 
-                if (bytesLeftInBuffer == 0 || bytesLeftInBuffer < sizeHint)
+                if (bytesLeftInBuffer != 0 && bytesLeftInBuffer >= sizeHint)
                 {
-                    if (this.writingHeadBytesBuffered > 0)
-                    {
-                        // Flush buffered data to the segment
-                        this.writingHead.End += this.writingHeadBytesBuffered;
-                        this.writingHeadBytesBuffered = 0;
-                    }
-
-                    BufferSegment newSegment = this.AllocateSegment(sizeHint);
-
-                    this.writingHead.SetNext(newSegment);
-                    this.writingHead = newSegment;
+                    return;
                 }
+
+                if (this.writingHeadBytesBuffered > 0)
+                {
+                    // Flush buffered data to the segment
+                    this.writingHead.End += this.writingHeadBytesBuffered;
+                    this.writingHeadBytesBuffered = 0;
+                }
+
+                BufferSegment newSegment = this.AllocateSegment(sizeHint);
+
+                this.writingHead.SetNext(newSegment);
+                this.writingHead = newSegment;
             }
         }
 
@@ -209,23 +209,26 @@ namespace MadPipeline
 
         public void AdvanceTo(in SequencePosition consumed)
         {
+            // AdvanceTo의 인자 하나로 단일화
+            // examinedSegment == consumedSegment
+            // examinedIndex == consumedIndex
+
+
             var consumedSegment = (BufferSegment?) consumed.GetObject();
             var consumedIndex = consumed.GetInteger();
-            var examinedSegment = (BufferSegment?) consumed.GetObject();
-            var examinedIndex = consumed.GetInteger();
             
             BufferSegment? returnStart = null;
             BufferSegment? returnEnd = null;
 
-            if (examinedSegment != null && this.lastExaminedIndex >= 0)
+            if (consumedSegment != null && this.lastExaminedIndex >= 0)
             {
-                var examinedBytes = BufferSegment.GetLength(this.lastExaminedIndex, examinedSegment, examinedIndex);
+                var examinedBytes = BufferSegment.GetLength(this.lastExaminedIndex, consumedSegment, consumedIndex);
                 var oldLength = this.unconsumedBytes;
 
                 this.unconsumedBytes -= examinedBytes;
 
                 // 절대위치를 저장
-                this.lastExaminedIndex = examinedSegment.RunningIndex + examinedIndex;
+                this.lastExaminedIndex = consumedSegment.RunningIndex + consumedIndex;
 
                 Debug.Assert(this.unconsumedBytes >= 0, "Length has gone negative");
 
@@ -272,6 +275,7 @@ namespace MadPipeline
 
             }
 
+            // 세그먼트를 거듭해가며 넘는 과정
             while (returnStart != null && returnStart != returnEnd)
             {
                 var next = returnStart.NextSegment;
@@ -390,7 +394,7 @@ namespace MadPipeline
         {
             if (execute)
             {
-                this.AllocateWriteHeadIfNeeded(0);
+                this.AllocateWriteHead(0);
 
                 if (source.Length <= this.writingHeadMemory.Length)
                 {
@@ -473,7 +477,6 @@ namespace MadPipeline
         
         public Future<ReadResult> DoRead(out ReadResult result, int targetLength, bool execute = false)
         {
-            
             if (execute)
             {
                 this.GetReadResult(out result, targetLength);
