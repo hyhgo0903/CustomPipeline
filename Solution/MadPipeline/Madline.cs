@@ -231,7 +231,7 @@ namespace MadPipeline
                 return;
             }
             this.notFlushedBytes += bytesWritten;
-            this.writingHeadBytesBuffered += bytesWritten;
+            Interlocked.Add(ref this.writingHeadBytesBuffered, bytesWritten);
             this.writingHeadMemory = this.writingHeadMemory[bytesWritten..];
         }
 
@@ -248,29 +248,30 @@ namespace MadPipeline
             BufferSegment? returnStart = null;
             BufferSegment? returnEnd = null;
 
-            if (consumedSegment != null && this.lastExaminedIndex >= 0)
+            lock (sync)
             {
-                var examinedBytes = BufferSegment.GetLength(this.lastExaminedIndex, consumedSegment, consumedIndex);
-                var oldLength = this.unconsumedBytes;
-
-                Interlocked.Add(ref this.unconsumedBytes, -examinedBytes);
-
-                var calculatedExaminedIndex = consumedSegment.RunningIndex + consumedIndex;
-                // 절대위치를 저장
-                Interlocked.Exchange(ref this.lastExaminedIndex, calculatedExaminedIndex);
-
-                Debug.Assert(this.unconsumedBytes >= 0, "Length has gone negative");
-
-                if (oldLength >= this.resumeWriterThreshold &&
-                    this.unconsumedBytes < this.resumeWriterThreshold)
+                if (consumedSegment != null && this.lastExaminedIndex >= 0)
                 {
-                    this.operationState.ResumeWrite();
-                }
-            }
+                    var examinedBytes = BufferSegment.GetLength(this.lastExaminedIndex, consumedSegment, consumedIndex);
+                    var oldLength = this.unconsumedBytes;
 
-            if (consumedSegment != null)
-            {
-                lock (sync)
+                    Interlocked.Add(ref this.unconsumedBytes, -examinedBytes);
+
+                    var calculatedExaminedIndex = consumedSegment.RunningIndex + consumedIndex;
+                    // 절대위치를 저장
+                    Interlocked.Exchange(ref this.lastExaminedIndex, calculatedExaminedIndex);
+
+                    Debug.Assert(this.unconsumedBytes >= 0, "Length has gone negative");
+
+                    if (oldLength >= this.resumeWriterThreshold &&
+                        this.unconsumedBytes < this.resumeWriterThreshold)
+                    {
+                        this.operationState.ResumeWrite();
+                    }
+                }
+
+
+                if (consumedSegment != null)
                 {
                     returnStart = this.readHead;
                     returnEnd = consumedSegment;
@@ -303,19 +304,19 @@ namespace MadPipeline
                         this.readHeadIndex = consumedIndex;
                     }
                 }
-            }
 
-            // 세그먼트를 거듭해가며 넘는 과정
-            while (returnStart != null && returnStart != returnEnd)
-            {
-                var next = returnStart.NextSegment;
-                returnStart.ResetMemory();
-                this.ReturnSegment(returnStart);
-                returnStart = next;
-            }
+                // 세그먼트를 거듭해가며 넘는 과정
+                while (returnStart != null && returnStart != returnEnd)
+                {
+                    var next = returnStart.NextSegment;
+                    returnStart.ResetMemory();
+                    this.ReturnSegment(returnStart);
+                    returnStart = next;
+                }
 
-            this.Callback.WriteSignal.Set();
-            this.operationState.EndRead();
+                this.Callback.WriteSignal.Set();
+                this.operationState.EndRead();
+            }
         }
 
         private void MoveReturnEndToNextBlock(ref BufferSegment? returnEnd)
@@ -332,7 +333,6 @@ namespace MadPipeline
 
             returnEnd = nextBlock;
         }
-
 
         #endregion
 
@@ -452,7 +452,7 @@ namespace MadPipeline
 
                         // We filled the segment
                         this.writingHead.End += writable;
-                        this.writingHeadBytesBuffered = 0;
+                        Interlocked.Exchange(ref this.writingHeadBytesBuffered, 0);
 
                         // This is optimized to use pooled memory. That's why we pass 0 instead of
                         // source.Length
