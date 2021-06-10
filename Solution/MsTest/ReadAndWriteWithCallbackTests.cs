@@ -44,7 +44,6 @@
                 this.MadReader.DoRead(out result, 12).Then(
                     readResult =>
                     {
-                        Assert.AreEqual(12, readResult.Buffer.Length);
                         this.ReadProcess();
                     });
             }
@@ -147,7 +146,6 @@
                 this.MadReader.DoRead(out result, targetLength).Then(
                     readResult =>
                     {
-                        Assert.AreEqual(targetLength, readResult.Buffer.Length);
                         this.ReadWithTargetBytesProcess(targetLength);
                     });
             }

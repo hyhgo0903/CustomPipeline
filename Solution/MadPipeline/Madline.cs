@@ -27,12 +27,12 @@ namespace MadPipeline
         
         private BufferSegment? readHead;
         private int readHeadIndex;
+        
+        private BufferSegment? readTail;
+        private int readTailIndex;
 
         private readonly int maxPooledBufferSize;
         private bool disposed;
-
-        private BufferSegment? readTail;
-        private int readTailIndex;
 
         private BufferSegment? writingHead;
         private Memory<byte> writingHeadMemory;
@@ -53,7 +53,7 @@ namespace MadPipeline
 
         private bool isWriterCompleted;
         private bool isReaderCompleted;
-
+        
         public Madline(MadlineOptions options)
         {
             bufferSegmentPool = new BufferSegmentStack(InitialSegmentPoolSize);
@@ -74,6 +74,24 @@ namespace MadPipeline
         
         public MadlineCallbacks Callback { get; }
 
+        #region Thread
+
+        // 2개의 쓰레드 이용 
+        // 쓰기부 읽기부 메서드별로 구분되도록 지원해야 함(락 처리 후 구현예정)
+
+        //private Thread? writerThread;
+        //private Thread? readerThread;
+        
+        //private bool CheckWriterThread()
+        //{
+        //    return Thread.CurrentThread == writerThread;
+        //}
+        //private bool CheckReaderThread()
+        //{
+        //    return Thread.CurrentThread == readerThread;
+        //}
+
+        #endregion
 
         #region BufferManagement
 
@@ -108,38 +126,41 @@ namespace MadPipeline
                 return;
             }
 
-            this.operationState.BeginWrite();
-
-            // 이럴 경우는 어떤 경우일지 생각해볼 것
-            if (this.writingHead == null)
+            lock (sync)
             {
-                // We need to allocate memory to write since nobody has written before
-                BufferSegment newSegment = this.AllocateSegment(sizeHint);
+                this.operationState.BeginWrite();
 
-                // Set all the pointers
-                this.writingHead = this.readHead = this.readTail = newSegment;
-                this.lastExaminedIndex = 0;
-            }
-            else
-            {
-                var bytesLeftInBuffer = this.writingHeadMemory.Length;
-
-                if (bytesLeftInBuffer != 0 && bytesLeftInBuffer >= sizeHint)
+                if (this.writingHead == null)
                 {
-                    return;
-                }
+                    // We need to allocate memory to write since nobody has written before
+                    BufferSegment newSegment = this.AllocateSegment(sizeHint);
 
-                if (this.writingHeadBytesBuffered > 0)
+                    // Set all the pointers
+
+                    this.writingHead = this.readHead = this.readTail = newSegment;
+                    Interlocked.Exchange(ref this.lastExaminedIndex, 0);
+                }
+                else
                 {
-                    // Flush buffered data to the segment
-                    this.writingHead.End += this.writingHeadBytesBuffered;
-                    this.writingHeadBytesBuffered = 0;
+                    var bytesLeftInBuffer = this.writingHeadMemory.Length;
+
+                    if (bytesLeftInBuffer != 0 && bytesLeftInBuffer >= sizeHint)
+                    {
+                        return;
+                    }
+
+                    if (this.writingHeadBytesBuffered > 0)
+                    {
+                        // Flush buffered data to the segment
+                        this.writingHead.End += this.writingHeadBytesBuffered;
+                        this.writingHeadBytesBuffered = 0;
+                    }
+
+                    BufferSegment newSegment = this.AllocateSegment(sizeHint);
+
+                    this.writingHead.SetNext(newSegment);
+                    this.writingHead = newSegment;
                 }
-
-                BufferSegment newSegment = this.AllocateSegment(sizeHint);
-
-                this.writingHead.SetNext(newSegment);
-                this.writingHead = newSegment;
             }
         }
 
@@ -177,7 +198,10 @@ namespace MadPipeline
         // Segment를 풀에서 꺼내오기(풀에 없으면 새로 만듦)
         private BufferSegment CreateSegment()
         {
-            return this.bufferSegmentPool.TryPop(out var segment) ? segment : new BufferSegment();
+            lock (this.sync)
+            {
+                return this.bufferSegmentPool.TryPop(out var segment) ? segment : new BufferSegment();
+            }
         }
         
         // 다 읽은 Segment를 풀로 반환하기
@@ -186,7 +210,11 @@ namespace MadPipeline
             Debug.Assert(segment != this.readHead, "Returning _readHead segment that's in use!");
             Debug.Assert(segment != this.readTail, "Returning _readTail segment that's in use!");
             Debug.Assert(segment != this.writingHead, "Returning _writingHead segment that's in use!");
-            if (this.bufferSegmentPool.Count < MaxSegmentPoolSize)
+            if (this.bufferSegmentPool.Count >= MaxSegmentPoolSize)
+            {
+                return;
+            }
+            lock (this.sync)
             {
                 this.bufferSegmentPool.Push(segment);
             }
@@ -225,10 +253,11 @@ namespace MadPipeline
                 var examinedBytes = BufferSegment.GetLength(this.lastExaminedIndex, consumedSegment, consumedIndex);
                 var oldLength = this.unconsumedBytes;
 
-                this.unconsumedBytes -= examinedBytes;
+                Interlocked.Add(ref this.unconsumedBytes, -examinedBytes);
 
+                var calculatedExaminedIndex = consumedSegment.RunningIndex + consumedIndex;
                 // 절대위치를 저장
-                this.lastExaminedIndex = consumedSegment.RunningIndex + consumedIndex;
+                Interlocked.Exchange(ref this.lastExaminedIndex, calculatedExaminedIndex);
 
                 Debug.Assert(this.unconsumedBytes >= 0, "Length has gone negative");
 
@@ -241,25 +270,32 @@ namespace MadPipeline
 
             if (consumedSegment != null)
             {
-
-                returnStart = this.readHead;
-                returnEnd = consumedSegment;
-
-                if (consumedIndex == returnEnd.Length)
+                lock (sync)
                 {
-                    if (this.writingHead != returnEnd)
-                    {
-                        this.MoveReturnEndToNextBlock(ref returnEnd);
-                    }
-                    // If the writing head is the same as the block to be returned, then we need to make sure
-                    // there's no pending write and that there's no buffered data for the writing head
-                    else if (this.writingHeadBytesBuffered == 0 && !this.operationState.IsWritingActive)
-                    {
-                        // writing head가 return block이면 null로 초기화, 모두 consumed한 것임
-                        this.writingHead = null;
-                        this.writingHeadMemory = default;
+                    returnStart = this.readHead;
+                    returnEnd = consumedSegment;
 
-                        this.MoveReturnEndToNextBlock(ref returnEnd);
+                    if (consumedIndex == returnEnd.Length)
+                    {
+                        if (this.writingHead != returnEnd)
+                        {
+                            this.MoveReturnEndToNextBlock(ref returnEnd);
+                        }
+                        // If the writing head is the same as the block to be returned, then we need to make sure
+                        // there's no pending write and that there's no buffered data for the writing head
+                        else if (this.writingHeadBytesBuffered == 0 && !this.operationState.IsWritingActive)
+                        {
+                            // writing head가 return block이면 null로 초기화, 모두 consumed한 것임
+                            this.writingHead = null;
+                            this.writingHeadMemory = default;
+
+                            this.MoveReturnEndToNextBlock(ref returnEnd);
+                        }
+                        else
+                        {
+                            this.readHead = consumedSegment;
+                            this.readHeadIndex = consumedIndex;
+                        }
                     }
                     else
                     {
@@ -267,12 +303,6 @@ namespace MadPipeline
                         this.readHeadIndex = consumedIndex;
                     }
                 }
-                else
-                {
-                    this.readHead = consumedSegment;
-                    this.readHeadIndex = consumedIndex;
-                }
-
             }
 
             // 세그먼트를 거듭해가며 넘는 과정
@@ -314,10 +344,7 @@ namespace MadPipeline
 
             this.Flush();
 
-            if (this.isWriterCompleted == false)
-            {
-                this.isWriterCompleted = true;
-            }
+            this.isWriterCompleted = true;
 
             if (completed)
             {
@@ -334,10 +361,7 @@ namespace MadPipeline
                 this.operationState.EndRead();
             }
 
-            if (this.isReaderCompleted == false)
-            {
-                this.isReaderCompleted = true;
-            }
+            this.isReaderCompleted = true;
             
             if (completed)
             {
@@ -352,29 +376,33 @@ namespace MadPipeline
                 return;
             }
 
-            this.disposed = true;
-            // 모든 세그먼트를 반환
-            var segment = this.readHead ?? this.readTail;
-            while (segment != null)
+            lock (this.sync)
             {
-                BufferSegment returnSegment = segment;
-                segment = segment.NextSegment;
+                this.disposed = true;
+                // 모든 세그먼트를 반환
+                var segment = this.readHead ?? this.readTail;
+                while (segment != null)
+                {
+                    BufferSegment returnSegment = segment;
+                    segment = segment.NextSegment;
 
-                returnSegment.ResetMemory();
+                    returnSegment.ResetMemory();
+                }
+
+                this.writingHead = null;
+                this.readHead = null;
+                this.readTail = null;
+                this.lastExaminedIndex = -1;
             }
-            
-            this.writingHead = null;
-            this.readHead = null;
-            this.readTail = null;
-            this.lastExaminedIndex = -1;
         }
 
         #endregion
 
         #region Write
-
+        
         public bool TryWrite(in ReadOnlyMemory<byte> source)
         {
+
             // unconsumedBytes가 PauseWriterThreshold를 넘고있는 경우임
             if (this.operationState.IsWritingPaused)
             {
@@ -480,11 +508,11 @@ namespace MadPipeline
             if (execute)
             {
                 this.GetReadResult(out result, targetLength);
-                this.targetBytes = 0;
+                Interlocked.Exchange(ref this.targetBytes, 0);
             }
             else
             {
-                this.targetBytes = targetLength;
+                Interlocked.Exchange(ref this.targetBytes, targetLength);
                 var promise = new Promise<ReadResult>();
                 this.Callback.ReadPromise = promise;
                 result = default;
@@ -533,26 +561,22 @@ namespace MadPipeline
         // 당장은 안 쓰고 있으나, 재사용을 위해 삭제하지는 않았음
         public void Reset()
         {
-            lock (sync)
+            lock (this.sync)
             {
                 this.disposed = false;
-                this.ResetState();
+                this.operationState = default;
+                this.isWriterCompleted = false;
+                this.isReaderCompleted = false;
+                this.readTailIndex = 0;
+                this.readHeadIndex = 0;
+                this.lastExaminedIndex = -1;
+                this.notFlushedBytes = 0;
+                this.unconsumedBytes = 0;
             }
-        }
-        private void ResetState()
-        {
-            this.operationState = default;
-            this.isWriterCompleted = false;
-            this.isReaderCompleted = false;
-            this.readTailIndex = 0;
-            this.readHeadIndex = 0;
-            this.lastExaminedIndex = -1;
-            this.notFlushedBytes = 0;
-            this.unconsumedBytes = 0;
         }
 
         #endregion
-
+        
         public bool Flush()
         {
             this.operationState.EndWrite();
@@ -565,34 +589,39 @@ namespace MadPipeline
 
             // writingHead 업데이트
             Debug.Assert(this.writingHead != null);
-            this.writingHead.End += this.writingHeadBytesBuffered;
 
-            // 항상 readTail를 writeHead로 이동시킨다.
-            this.readTail = this.writingHead;
-            this.readTailIndex = this.writingHead.End;
-
-            var oldLength = this.unconsumedBytes;
-            this.unconsumedBytes += this.notFlushedBytes;
-
-            if (this.pauseWriterThreshold > 0 &&
-                oldLength < this.pauseWriterThreshold &&
-                this.unconsumedBytes >= this.pauseWriterThreshold &&
-                !this.isReaderCompleted)
+            lock (sync)
             {
-                this.operationState.PauseWrite();
+                this.writingHead.End += this.writingHeadBytesBuffered;
+
+                // 항상 readTail를 writeHead로 이동시킨다.
+                this.readTail = this.writingHead;
+                this.readTailIndex = this.writingHead.End;
+
+                var oldLength = this.unconsumedBytes;
+                Interlocked.Add(ref this.unconsumedBytes, this.notFlushedBytes);
+
+                if (this.pauseWriterThreshold > 0 &&
+                    oldLength < this.pauseWriterThreshold &&
+                    this.unconsumedBytes >= this.pauseWriterThreshold &&
+                    !this.isReaderCompleted)
+                {
+                    this.operationState.PauseWrite();
+                }
+
+                this.notFlushedBytes = 0;
+                this.writingHeadBytesBuffered = 0;
+
+                // 타겟바이트 이상으로 들어온 경우 예약된 읽기명령을 실행
+                if (this.unconsumedBytes >= this.targetBytes
+                    && this.readHead != null)
+                {
+                    //여기서 result로 전달할 이유가 있을까.. 뭔가 잘못쓰고있는듯 하다.
+                    //기존 : this.GetReadResult(out var result, this.targetBytes);
+                    this.Callback.ReadPromise.Complete(default);
+                }
             }
-
-            this.notFlushedBytes = 0;
-            this.writingHeadBytesBuffered = 0;
-
-            // 타겟바이트 이상으로 들어온 경우 예약된 읽기명령을 실행
-            if (this.unconsumedBytes >= this.targetBytes
-                && this.readHead != null)
-            {
-                this.GetReadResult(out var result, this.targetBytes);
-                this.Callback.ReadPromise.Complete(result);
-            }
-
+            
             return false;
         }
 
