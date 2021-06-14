@@ -77,10 +77,7 @@ namespace MadPipeline
         #region Thread
 
         // 2개의 쓰레드 이용 
-        // 쓰기부 읽기부 메서드별로 구분되도록 지원해야 함(락 처리 후 구현예정)
-
-        //private Thread? writerThread;
-        //private Thread? readerThread;
+        // 쓰기부 읽기부 메서드별로 구분되도록 지원해야
         
         //private bool CheckWriterThread()
         //{
@@ -314,6 +311,7 @@ namespace MadPipeline
                     returnStart = next;
                 }
 
+                // 이건 쓰기부분 쓰레드에서 실행되어야 함(변경해야)
                 this.Callback.WriteSignal.Set();
                 this.operationState.EndRead();
             }
@@ -450,7 +448,6 @@ namespace MadPipeline
                             break;
                         }
 
-                        // We filled the segment
                         this.writingHead.End += writable;
                         Interlocked.Exchange(ref this.writingHeadBytesBuffered, 0);
 
@@ -599,7 +596,7 @@ namespace MadPipeline
                 this.readTailIndex = this.writingHead.End;
 
                 var oldLength = this.unconsumedBytes;
-                Interlocked.Add(ref this.unconsumedBytes, this.notFlushedBytes);
+                this.unconsumedBytes += this.notFlushedBytes;
 
                 if (this.pauseWriterThreshold > 0 &&
                     oldLength < this.pauseWriterThreshold &&
@@ -618,6 +615,8 @@ namespace MadPipeline
                 {
                     //여기서 result로 전달할 이유가 있을까.. 뭔가 잘못쓰고있는듯 하다.
                     //기존 : this.GetReadResult(out var result, this.targetBytes);
+
+                    // + 이건 읽기부분 쓰레드에서 실행되어야 함(변경해야)
                     this.Callback.ReadPromise.Complete(default);
                 }
             }
