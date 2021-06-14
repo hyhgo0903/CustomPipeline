@@ -6,13 +6,24 @@
     {
         private readonly SyncEvents syncEvents;
         private readonly MadlineOperationState operationState;
-        internal Thread? Thread1 { get; set; }
+        internal Thread? ProducerThread { get; set; }
         
         internal Producer(SyncEvents syncEvents, MadlineOperationState operationState)
         {
             this.syncEvents = syncEvents;
             this.operationState = operationState;
         }
+
+        internal bool SetProducerThread()
+        {
+            if (this.operationState.IsWritingActive)
+            {
+                return false;
+            }
+            this.ProducerThread = Thread.CurrentThread;
+            return true;
+        }
+
 
     }
 }

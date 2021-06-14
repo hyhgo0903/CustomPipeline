@@ -85,7 +85,7 @@
 
             this.MadWriter.Flush();
             this.MadWriter.CompleteWriter();
-
+            
             this.MadReader.TryRead(out var result, 4);
             Assert.AreEqual(4, result.Buffer.Length);
             this.MadReader.AdvanceTo(result.Buffer.End);
