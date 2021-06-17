@@ -73,7 +73,7 @@
                             throw new ArgumentOutOfRangeException(nameof(elementIndex));
                         }
 
-                        GCHandle handle = GCHandle.Alloc(segment.Array, GCHandleType.Pinned);
+                        var handle = GCHandle.Alloc(segment.Array, GCHandleType.Pinned);
 
                         return new MemoryHandle(Unsafe.Add<byte>(((void*)handle.AddrOfPinnedObject()),
                             elementIndex + segment.Offset), handle, this);
@@ -90,7 +90,7 @@
             {
                 this.pool.CheckDisposed();
 
-                int newRefCount = Interlocked.Decrement(ref referenceCount);
+                var newRefCount = Interlocked.Decrement(ref referenceCount);
 
                 if (newRefCount < 0)
                     throw new InvalidOperationException();

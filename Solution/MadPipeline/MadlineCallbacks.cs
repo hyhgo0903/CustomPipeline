@@ -1,4 +1,5 @@
-﻿using System.Threading;
+﻿using System.Buffers;
+using System.Threading;
 
 namespace MadPipeline
 {
@@ -6,33 +7,22 @@ namespace MadPipeline
 
     public sealed class MadlineCallbacks
     {
-        private Promise<ReadResult> readPromise;
-        private readonly Signal writeSignal;
+        private Promise<ReadOnlySequence<byte>> readPromise;
 
         public MadlineCallbacks()
         {
-            this.ReadPromise = new Promise<ReadResult>();
-            this.writeSignal = new Signal();
+            this.readPromise = new Promise<ReadOnlySequence<byte>>();
+            this.WriteSignal = new Signal();
         }
 
-        public Promise<ReadResult> ReadPromise
-        {
-            get => readPromise;
-            set => readPromise = value;
-        }
+        public Promise<ReadOnlySequence<byte>> ReadPromise => readPromise;
 
-        public Signal WriteSignal => writeSignal;
+        public Signal WriteSignal { get; }
 
-        // Promise 꼬이는거 방지해서 일단 마련 (signal은 프로퍼티 불러서 수동으로 Reset호출)
-        public Promise<ReadResult> NewReadPromise()
-        {
-            this.ReadPromise = new Promise<ReadResult>();
-            return this.ReadPromise;
-        }
 
         public void ResetReadPromise()
         {
-            var promise = new Promise<ReadResult>();
+            var promise = new Promise<ReadOnlySequence<byte>>();
             Interlocked.Exchange(ref this.readPromise, promise);
         }
     }

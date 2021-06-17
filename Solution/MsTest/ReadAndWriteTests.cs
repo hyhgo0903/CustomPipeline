@@ -1,95 +1,96 @@
-﻿namespace Tests
+﻿using System;
+using System.Reflection.Metadata;
+using System.Text;
+using MadPipeline.MadngineSource;
+
+namespace Tests
 {
-    using System.Buffers;
     using Microsoft.VisualStudio.TestTools.UnitTesting;
-    using Infrastructure;
+    using System.Buffers;
+    using System.Collections.Specialized;
+    using Tests.Infrastructure;
 
     [TestClass]
     public sealed class ReadAndWriteTests : MadlineTest
     {
+
         [TestMethod]
-        public void ReadTest()
+        public void WriteReadTest()
         {
-            this.MadWriter.Write(new byte[] {1});
-            this.MadWriter.Write(new byte[] {2});
-            this.MadWriter.Write(new byte[] {3});
+            // 헤더포함 12바이트
+            var readOnlyMemory = CreateMessageWithRandomBody(10);
+            this.MadWriter.TryWrite(in readOnlyMemory);
 
             this.MadWriter.Flush();
 
-            this.MadReader.TryRead(out var result, 3);
-            var data = result.Buffer.ToArray();
-            // data는 {1, 2, 3} 이므로 다름
-            CollectionAssert.AreNotEqual(new byte[] {1, 1, 1}, data);
-            CollectionAssert.AreEqual(new byte[] {1, 2, 3}, data);
+            this.MadReader.TryRead(out var result);
+            var data = result.ToArray();
 
-            // Advance 전 : 3
-            Assert.AreEqual(this.Madline.Length, 3);
-            this.MadReader.AdvanceTo(result.Buffer.End);
+            // 헤더를 검사해보고
+            // 헤더+바디길이 12맞는지 확인
+            Assert.AreEqual(12, result.Length);
+            // 바디길이 맞는지 확인
+            Assert.AreEqual(10, GetBodyLengthFromMessage(result));
+
+            // Advance 전 : 12
+            Assert.AreEqual(this.Madline.Length, 12);
+            this.MadReader.AdvanceTo(result.End);
             // Advance 후 : 0
             Assert.AreEqual(this.Madline.Length, 0);
         }
 
         // 쓰고 읽는 과정
         [TestMethod]
-        public void WriteTest()
+        public void WriteWithMessageTest()
         {
-            var rawSource = new byte[] {1, 2, 3};
+            var rawSource = CreateMessage(new byte[] {1, 2, 3});
             // 다 쓴 경우 비교하게 읽기
             this.MadWriter.TryWrite(rawSource);
-            this.MadReader.TryRead(out var result, 3);
-            var data = result.Buffer.ToArray();
-            CollectionAssert.AreNotEqual(new byte[] {1, 1, 1}, data);
-            CollectionAssert.AreEqual(new byte[] {1, 2, 3}, data);
+            this.MadReader.TryRead(out var result);
+            Assert.AreEqual(3, GetBodyLengthFromMessage(result));
+            var data = result.ToArray();
+            CollectionAssert.AreEqual(new byte[] {3<<2, 0, 1, 2, 3}, data);
+            this.MadReader.AdvanceTo(result.End);
+        }
+        
+        [TestMethod]
+        public void NotReadWhenNotAllMessagesAreCome()
+        {
+            var rawSource = CreateMessage(new byte[] { 1, 2, 3 });
+            rawSource = rawSource.Slice(0, rawSource.Length - 1);
+            // 일부만 들어왔고 이 경우 읽히면 안 됨
+            this.MadWriter.TryWrite(rawSource);
 
-            this.MadReader.AdvanceTo(result.Buffer.End);
+            var expectZero = this.MadReader.TryRead(out var result);
+            Assert.AreEqual(0, expectZero);
+            this.MadReader.AdvanceTo(result.End);
         }
 
         [TestMethod]
         public void MultipleWriteTest()
         {
-            var rawSource = new byte[] {1, 2};
+            var rawSource = CreateMessage(Encoding.ASCII.GetBytes("Hello World!"));
+            // 다 쓴 경우 비교하게 읽기
             this.MadWriter.TryWrite(rawSource);
-            rawSource = new byte[] {3, 4, 5, 6};
             this.MadWriter.TryWrite(rawSource);
-            rawSource = new byte[] {7, 8, 9};
             this.MadWriter.TryWrite(rawSource);
-            this.MadReader.TryRead(out var result, 9);
+            this.MadReader.TryRead(out var result);
+            Assert.AreEqual(12, GetBodyLengthFromMessage(result));
+            var message = GetBodyFromMessage(result);
+            Assert.AreNotEqual("Hell World!", Encoding.ASCII.GetString(message));
+            Assert.AreEqual("Hello World!", Encoding.ASCII.GetString(message));
+            this.MadReader.AdvanceTo(result.End);
 
-            byte[] data = result.Buffer.ToArray();
+            this.MadReader.TryRead(out result);
+            Assert.AreEqual(12, GetBodyLengthFromMessage(result));
+            Assert.AreEqual("Hello World!", Encoding.ASCII.GetString(message));
+            this.MadReader.AdvanceTo(result.End);
 
-            this.MadReader.AdvanceTo(result.Buffer.End);
-
-            CollectionAssert.AreNotEqual(new byte[] {1, 1, 1, 1, 1, 1}, data);
-            CollectionAssert.AreEqual(new byte[] {1, 2, 3, 4, 5, 6, 7, 8, 9}, data);
+            this.MadReader.TryRead(out result);
+            Assert.AreEqual(12, GetBodyLengthFromMessage(result));
+            Assert.AreEqual("Hello World!", Encoding.ASCII.GetString(message));
+            this.MadReader.AdvanceTo(result.End);
         }
 
-
-        [TestMethod]
-        public void MultipleWriteButNotFlushedTest()
-        {
-            this.MadWriter.Write(new byte[] { 1, 2 });
-            this.MadWriter.Write(new byte[] { 3, 4, 5, 6 });
-            this.MadWriter.Flush();
-            // 이건 Flush되지 않음
-            this.MadWriter.Write(new byte[] { 7, 8, 9 });
-            this.MadReader.TryRead(out var result, 6);
-            var data = result.Buffer.ToArray();
-            CollectionAssert.AreNotEqual(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9 }, data);
-            CollectionAssert.AreEqual(new byte[] {1, 2, 3, 4, 5, 6}, data);
-        }
-
-        [TestMethod]
-        public void CompleteAfterAdvanceCommits()
-        {
-            this.MadWriter.WriteEmpty(4);
-
-            this.MadWriter.Flush();
-            this.MadWriter.CompleteWriter();
-            
-            this.MadReader.TryRead(out var result, 4);
-            Assert.AreEqual(4, result.Buffer.Length);
-            this.MadReader.AdvanceTo(result.Buffer.End);
-            this.MadReader.CompleteReader();
-        }
     }
 }
