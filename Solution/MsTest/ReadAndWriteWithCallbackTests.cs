@@ -31,7 +31,7 @@
         {
             ++this.readProcessPassed;
             var resultInt = this.MadReader.TryRead(out var result);
-            if (resultInt != 0)
+            if (resultInt > 0)
             {
                 var message = GetBodyFromMessage(result);
                 Assert.AreNotEqual("Hell World!", Encoding.ASCII.GetString(message));
@@ -49,12 +49,17 @@
                 this.MadReader.DoRead().Then(
                     readResult =>
                     {
+                        ++this.readProcessPassed;
                         var message = GetBodyFromMessage(readResult);
                         Assert.AreNotEqual("Hell World!", Encoding.ASCII.GetString(message));
                         Assert.AreEqual("Hello World!", Encoding.ASCII.GetString(message));
                         Assert.AreEqual(12, GetBodyLengthFromMessage(readResult));
                         this.MadReader.AdvanceTo(readResult.End);
-                        this.ReadProcess();
+                        if (resultInt == 1)
+                        {
+                            // 아직 읽을 게 남은 경우이므로 다시 읽기 시도
+                            this.ReadProcess();
+                        }
                     });
             }
         }
@@ -100,8 +105,7 @@
             this.WriteProcess();
             this.WriteProcess();
             this.WriteProcess();
-
-            Assert.AreEqual(3, this.writeProcessPassed);
+            
             // 처음 ReadProcess 2회 호출되며 세 번, 예약된 ReadProcess가 진행되며 네 번
             Assert.AreEqual(4, this.readProcessPassed);
         }
@@ -113,7 +117,7 @@
             this.WriteProcess();
             this.WriteProcess();
             this.WriteProcess();
-            // 타겟 알아서 잡으면서 끝까지 읽는지?
+            // 타겟 알아서 잡으면서 끝까지 읽는지
             this.ReadProcess();
 
             Assert.AreEqual(3, this.writeProcessPassed);

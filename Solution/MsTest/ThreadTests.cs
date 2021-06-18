@@ -1,4 +1,5 @@
 ﻿using System.Threading;
+using MadPipeline;
 
 namespace Tests
 {
@@ -8,10 +9,20 @@ namespace Tests
     using Infrastructure;
 
     [TestClass]
-    public sealed class ReadAndWriteWithThreadTests : MadlineTest
+    public sealed class ThreadTests : MadlineTest
     {
+
         private int writeProcessPassed;
         private int readProcessPassed;
+        Thread writeThread;
+        Thread readThread;
+
+        public ThreadTests()
+        {
+            this.writeThread = new Thread(this.WriteProcess);
+            this.readThread = new Thread(this.ReadProcess);
+        }
+
 
         // 데이터를 읽도록 시도하고, 실패한 경우 예약
         public void WriteProcess()
@@ -65,41 +76,35 @@ namespace Tests
         [TestMethod]
         public void WriteWithReadTest()
         {
-            var writeThread = new Thread(this.WriteProcess);
-            var readThread = new Thread(this.ReadProcess);
-            writeThread.Start();
-            readThread.Start();
-            writeThread.Join();
-            readThread.Join();
-            Assert.AreEqual(1, writeProcessPassed);
+            this.writeThread.Start();
+            this.readThread.Start();
+            this.writeThread.Join();
+            this.readThread.Join();
+            Assert.AreEqual(1, this.writeProcessPassed);
         }
 
         [TestMethod]
         public void FirstWriteTest()
         {
-            var writeThread = new Thread(this.WriteProcess);
-            var readThread = new Thread(this.ReadProcess);
-            writeThread.Start();
+            this.writeThread.Start();
             Thread.Sleep(10);
-            readThread.Start();
-            writeThread.Join();
-            readThread.Join();
-            Assert.AreEqual(1, readProcessPassed);
-            Assert.AreEqual(1, writeProcessPassed);
+            this.readThread.Start();
+            this.writeThread.Join();
+            this.readThread.Join();
+            Assert.AreEqual(1, this.readProcessPassed);
+            Assert.AreEqual(1, this.writeProcessPassed);
         }
         
         [TestMethod]
         public void FirstReadTest()
         {
-            var writeThread = new Thread(this.WriteProcess);
-            var readThread = new Thread(this.ReadProcess);
-            readThread.Start();
+            this.readThread.Start();
             Thread.Sleep(10);
-            writeThread.Start();
-            writeThread.Join();
-            readThread.Join();
-            Assert.AreEqual(2, readProcessPassed);
-            Assert.AreEqual(1, writeProcessPassed);
+            this.writeThread.Start();
+            this.writeThread.Join();
+            this.readThread.Join();
+            Assert.AreEqual(2, this.readProcessPassed);
+            Assert.AreEqual(1, this.writeProcessPassed);
         }
 
     }

@@ -29,9 +29,10 @@ namespace Tests
                     resumeWriterThreshold
                 ));
         }
-
+        // 랜덤
         public static Random r = new Random();
 
+        // 바이트 배열로 헤더+바디 만들어주는 함수
         public static ReadOnlyMemory<byte> CreateMessage(byte[] body)
         {
             var bodyLength = body.Length;
@@ -43,6 +44,7 @@ namespace Tests
 
             return new ReadOnlyMemory<byte>(array);
         }
+        // 바디길이 지정하여 헤더+바디 만들어주는 함수(바디는 랜덤으로 채워짐)
         public static ReadOnlyMemory<byte> CreateMessageWithRandomBody(int bodyLength)
         {
             var header = new Header(bodyLength, false, false);
@@ -51,7 +53,7 @@ namespace Tests
             // 임의의 정보를 갖는 바디를 채워준다.
             for (var i = 0; i < body.Length; ++i)
             {
-                body[i] = (byte)r.Next(16);
+                body[i] = (byte)r.Next(256);
             }
             var array = new byte[bodyLength + 2];
             Array.Copy(headerBytes, array, headerBytes.Length);
@@ -59,14 +61,16 @@ namespace Tests
 
             return new ReadOnlyMemory<byte>(array);
         }
+        // 헤더 제외한 바디길이
         public static int GetBodyLengthFromMessage(ReadOnlySequence<byte> source)
         {
             var num = (int) source.Length - 2;
             return num;
         }
+        // 헤더 제외한 바디만큼만 갖고오는
         public static byte[] GetBodyFromMessage(ReadOnlySequence<byte> source)
         {
-            return source.Slice(2, source.Length-2).ToArray();
+            return source.Length < 2 ? default : source.Slice(2, source.Length-2).ToArray();
         }
 
         public void Dispose()

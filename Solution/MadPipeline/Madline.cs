@@ -265,7 +265,6 @@ namespace MadPipeline
                 if (consumedSegment != null && this.lastExaminedIndex >= 0)
                 {
                     var examinedBytes = BufferSegment.GetLength(this.lastExaminedIndex, consumedSegment, consumedIndex);
-                    var oldLength = this.unconsumedBytes;
 
                     Interlocked.Add(ref this.unconsumedBytes, -examinedBytes);
 
@@ -275,8 +274,7 @@ namespace MadPipeline
 
                     Debug.Assert(this.unconsumedBytes >= 0, "Length has gone negative");
 
-                    if (oldLength >= this.resumeWriterThreshold &&
-                        this.unconsumedBytes < this.resumeWriterThreshold)
+                    if (this.unconsumedBytes < this.resumeWriterThreshold)
                     {
                         this.operationState.ResumeWrite();
                     }
@@ -325,15 +323,16 @@ namespace MadPipeline
                     this.ReturnSegment(returnStart);
                     returnStart = next;
                 }
-
-                if (this.operationState.IsWritingActive == false)
-                {
-                    this.Callback.WriteSignal.Set();
-                    this.Callback.WriteSignal.Reset();
-                }
-
-                this.operationState.EndRead();
             }
+            // 쓰는 중이거나 threshold넘어 pause된 경우라면 resume까지 쓰는걸 막음
+            if (this.operationState.IsWritingActive == false
+                && this.operationState.IsWritingPaused == false)
+            {
+                this.Callback.WriteSignal.Set();
+                this.Callback.WriteSignal.Reset();
+            }
+
+            this.operationState.EndRead();
         }
 
         private void MoveReturnEndToNextBlock(ref BufferSegment? returnEnd)
@@ -422,7 +421,6 @@ namespace MadPipeline
         
         public bool TryWrite(in ReadOnlyMemory<byte> source)
         {
-
             // unconsumedBytes가 PauseWriterThreshold를 넘고있는 경우임
             if (this.operationState.IsWritingPaused)
             {
@@ -505,16 +503,16 @@ namespace MadPipeline
                 this.readTail,
                 this.readTailIndex));
             header.Deconstruct(out var bodyLength, out _, out _);
-            Interlocked.Exchange(ref this.targetBytes, bodyLength + 2);
+            Interlocked.Exchange(ref this.targetBytes, bodyLength + Constant.HeaderBytes);
             return true;
         }
 
         // 변수로 넣는 targetLength는 DecodingFramer로 헤더 분석 후 사이즈 전달은 인자를 넣는다고 가정
         public int TryRead(out ReadOnlySequence<byte> result)
         {
-            // 읽을 헤더조차 없으면 return
             if (this.unconsumedBytes < 2 || this.readHead == null || this.readTail == null)
             {
+                this.operationState.PauseRead();
                 result = default;
                 return 0;
             }
@@ -536,17 +534,15 @@ namespace MadPipeline
             var targetLength = bodyLength + Constant.HeaderBytes;
             if (this.unconsumedBytes >= targetLength)
             {
-                this.GetReadResult(out result, bodyLength + Constant.HeaderBytes);
-                if (this.unconsumedBytes < 2 + targetLength)
-                {
-                    // 헤더크기만큼 더 쓸 데이터가 없으면
-                    return 2;
-                }
-                return 1;
+                this.GetReadResult(out result, targetLength);
+                // 헤더크기만큼 더 쓸 데이터가 없으면 읽기를 완료(2)
+                // 아니면 또 쓰기 시도할 예정으로 1 return
+                return this.unconsumedBytes < 2 + targetLength ? 2 : 1;
             }
 
             // 아니면 쓰기 예약만
-            this.targetBytes = bodyLength + 2;
+            this.operationState.PauseRead();
+            this.targetBytes = targetLength;
             result = default;
             return 0;
         }
@@ -560,7 +556,6 @@ namespace MadPipeline
 
         private void GetReadResult(out ReadOnlySequence<byte> result, int targetLength)
         {
-            var isCompleted = this.isWriterCompleted;
             var head = this.readHead;
             if (head != null)
             {
@@ -641,20 +636,17 @@ namespace MadPipeline
                 this.writingHeadBytesBuffered = 0;
             }
 
-            Promise<ReadOnlySequence<byte>>? promise = null;
+            // 프라미스 캡쳐해서 쓰는것을 고민해볼 것
+            //Promise<ReadOnlySequence<byte>>? promise = null;
+
             // 타겟바이트 이상으로 들어온 경우 예약된 읽기명령을 실행
-            if (this.unconsumedBytes >= 2 &&
-                this.readHead != null && this.operationState.IsReadingActive == false)
+            if (this.operationState.IsReadingPaused)
             {
-                if (this.PickTargetBytes() == false)
+                if (this.PickTargetBytes() && this.unconsumedBytes >= this.targetBytes)
                 {
-                    return false;
-                }
-                promise = this.Callback.ReadPromise;
-                if (this.targetBytes >= this.unconsumedBytes)
-                {
-                    TryRead(out var result);
-                    promise.Complete(result);
+                    this.operationState.ResumeRead();
+                    this.GetReadResult(out var result, this.targetBytes);
+                    this.Callback.ReadPromise.Complete(result);
                     this.Callback.ResetReadPromise();
                 }
             }
