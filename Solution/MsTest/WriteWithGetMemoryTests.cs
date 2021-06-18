@@ -7,7 +7,7 @@
     using System.Threading;
 
     [TestClass]
-    public sealed class MassiveThreadTests : MadlineTest
+    public sealed class WriteWithGetMemoryTests : MadlineTest
     {
         private readonly Madline madline;
         private readonly IMadlineWriter madWriter;
@@ -18,7 +18,7 @@
         private long writtenBytes;
         private long readBytes;
 
-        public MassiveThreadTests()
+        public WriteWithGetMemoryTests()
         {
             // 기존의 Threshold 가진 madline으로 테스트를 진행했습니다.
             var malineOptions = new MadlineOptions();
@@ -63,20 +63,24 @@
         public void WriteProcess()
         {
             var number = r.Next(20, 2000);
+
+            var memory = this.madWriter.GetMemory(number + 2);
+
             var rawSource = CreateMessageWithRandomBody(number);
-            if (this.madWriter.TryWrite(rawSource) == false)
+            rawSource.CopyTo(memory);
+            Interlocked.Add(ref this.writeTimes, -1);
+            if (this.madWriter.TryAdvance(number + 2))
             {
-                // TryWrite에 실패한다면 이 함수를 액션으로 예약
+                this.writtenBytes += number + 2;
+                this.madWriter.Flush();
+            }
+            else
+            {
                 this.madWriter.WriteSignal().OnCompleted(
                     () =>
                     {
                         this.WriteProcess();
                     });
-            }
-            else
-            {
-                Interlocked.Add(ref this.writeTimes, -1);
-                this.writtenBytes += number + 2;
             }
         }
         // WriteProcess()를 통해 기록된 것을 읽고 구문분석
@@ -105,13 +109,13 @@
                     });
             }
         }
-        
+
         [DataRow(10)]
         [DataRow(100)]
         [DataRow(1000)]
         [DataRow(10000)]
         [TestMethod]
-        public void MassiveThreadTest(int times)
+        public void MassiveGetMemoryTest(int times)
         {
             this.writeTimes = times;
             this.readTimes = times;
@@ -121,7 +125,7 @@
             writeThread.Start();
             readThread.Join();
             writeThread.Join();
-            using (var readFile = new StreamWriter(@"..\MassiveThreadTest.txt", true))
+            using (var readFile = new StreamWriter(@"..\MassiveGetMemoryTest.txt", true))
             {
                 readFile.WriteLine("Times = {0}, writtenBytes = {1}, readBytes = {2}",
                     times, this.writtenBytes, this.readBytes);

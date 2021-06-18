@@ -32,7 +32,7 @@ namespace Tests
             if (this.MadWriter.TryWrite(rawSource) == false)
             {
                 // TryWrite에 실패한다면 이 함수를 액션으로 예약
-                this.MadWriter.DoWrite().OnCompleted(
+                this.MadWriter.WriteSignal().OnCompleted(
                     () =>
                     {
                         this.WriteProcess();

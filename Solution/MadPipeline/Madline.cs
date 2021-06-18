@@ -234,7 +234,20 @@ namespace MadPipeline
         #endregion
 
         #region Advance
-        
+
+        public bool TryAdvance(int bytesWritten)
+        {
+            if (this.unconsumedBytes > this.pauseWriterThreshold)
+            {
+                this.operationState.PauseRead();
+                return false;
+            }
+
+            Advance(bytesWritten);
+            return true;
+        }
+
+
         public void Advance(int bytesWritten)
         {
             if (this.isReaderCompleted)
@@ -482,7 +495,7 @@ namespace MadPipeline
             return true;
         }
 
-        public Signal DoWrite()
+        public Signal WriteSignal()
         {
             this.Callback.WriteSignal.Reset();
             return this.Callback.WriteSignal;
@@ -512,7 +525,8 @@ namespace MadPipeline
         // 변수로 넣는 targetLength는 DecodingFramer로 헤더 분석 후 사이즈 전달은 인자를 넣는다고 가정
         public int TryRead(out ReadOnlySequence<byte> result)
         {
-            if (this.unconsumedBytes < 2 || this.readHead == null || this.readTail == null)
+            if (this.unconsumedBytes < 2 || this.operationState.IsReadingPaused == true
+                || this.readHead == null || this.readTail == null)
             {
                 this.operationState.PauseRead();
                 result = default;

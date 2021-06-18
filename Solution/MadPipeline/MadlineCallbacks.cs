@@ -13,11 +13,13 @@ namespace MadPipeline
         {
             this.readPromise = new Promise<ReadOnlySequence<byte>>();
             this.WriteSignal = new Signal();
+            this.AdvanceSignal = new Signal();
         }
 
         public Promise<ReadOnlySequence<byte>> ReadPromise => readPromise;
 
         public Signal WriteSignal { get; }
+        public Signal AdvanceSignal { get; }
 
 
         public void ResetReadPromise()
