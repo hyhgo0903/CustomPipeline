@@ -76,6 +76,8 @@ namespace MadPipeline
         }
 
         public long Length => this.unconsumedBytes;
+
+        public MadlineOperationState Status => this.operationState;
         
         public MadlineCallbacks Callback { get; }
 

@@ -2,7 +2,7 @@
 {
     using System;
 
-    internal struct MadlineOperationState
+    public struct MadlineOperationState
     {
         private State state;
 

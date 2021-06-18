@@ -9,7 +9,7 @@ namespace Tests
     using System.Threading;
 
     [TestClass]
-    public sealed class MassiveThreadTest : MadlineTest
+    public sealed class MassiveThreadTests : MadlineTest
     {
         private readonly Madline madline;
         private readonly IMadlineWriter madWriter;
@@ -20,10 +20,7 @@ namespace Tests
         private long writtenBytes;
         private long readBytes;
 
-        private bool writePaused;
-        private bool readPaused;
-
-        public MassiveThreadTest()
+        public MassiveThreadTests()
         {
             // 기존의 Threshold 가진 madline으로 테스트를 진행했습니다.
             var malineOptions = new MadlineOptions();
@@ -38,12 +35,13 @@ namespace Tests
         {
             while (this.writeTimes > 0)
             {
-                if (writePaused == false)
+                if (this.madline.Status.IsWritingPaused == false)
                 {
                     this.WriteProcess();
                 }
                 else
                 {
+                    // 성능 하락의 원인이 될 거 같은데 일단 없으면 터져서..
                     Thread.Sleep(1);
                 }
             }
@@ -53,7 +51,7 @@ namespace Tests
         {
             while (this.readTimes > 0)
             {
-                if (readPaused == false)
+                if (this.madline.Status.IsReadingPaused == false)
                 {
                     this.ReadProcess();
                 }
@@ -66,16 +64,14 @@ namespace Tests
 
         public void WriteProcess()
         {
-            var number = r.Next(30, 1000);
+            var number = r.Next(20, 2000);
             var rawSource = CreateMessageWithRandomBody(number);
             if (this.madWriter.TryWrite(rawSource) == false)
             {
-                this.writePaused = true;
                 // TryWrite에 실패한다면 이 함수를 액션으로 예약
                 this.madWriter.DoWrite().OnCompleted(
                     () =>
                     {
-                        this.writePaused = false;
                         this.WriteProcess();
                     });
             }
@@ -102,13 +98,11 @@ namespace Tests
             }
             else
             {
-                this.readPaused = true;
                 this.madReader.DoRead().Then(
                     readResult =>
                     {
-                        this.readPaused = false;
                         Interlocked.Add(ref this.readTimes, -1);
-                        this.readBytes += result.Length;
+                        this.readBytes += readResult.Length;
                         this.madReader.AdvanceTo(readResult.End);
                     });
             }
@@ -117,18 +111,18 @@ namespace Tests
         [DataRow(10)]
         [DataRow(100)]
         [DataRow(1000)]
+        [DataRow(10000)]
         [TestMethod]
-        public void MassiveWriteTest(int times)
+        public void MassiveThreadTest(int times)
         {
             this.writeTimes = times;
             this.readTimes = times;
             var writeThread = new Thread(this.StartWrite);
             var readThread = new Thread(this.StartRead);
-            writeThread.Start();
-            Thread.Sleep(10);
             readThread.Start();
-            writeThread.Join();
+            writeThread.Start();
             readThread.Join();
+            writeThread.Join();
             using (var readFile = new StreamWriter(@"..\readDump.txt", true))
             {
                 readFile.WriteLine("Times = {0}, writtenBytes = {1}, readBytes = {2}",
@@ -136,5 +130,6 @@ namespace Tests
             }
             Assert.AreEqual(this.writtenBytes, this.readBytes);
         }
+
     }
 }
