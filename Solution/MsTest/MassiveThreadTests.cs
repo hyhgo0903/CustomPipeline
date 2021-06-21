@@ -1,4 +1,6 @@
-﻿namespace Tests
+﻿using System.Diagnostics;
+
+namespace Tests
 {
     using MadPipeline;
     using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -33,7 +35,7 @@
         {
             while (this.writeTimes > 0)
             {
-                if (this.madline.Status.IsWritingPaused == false)
+                if (this.madline.State.IsWritingPaused == false)
                 {
                     this.WriteProcess();
                 }
@@ -49,7 +51,7 @@
         {
             while (this.readTimes > 0)
             {
-                if (this.madline.Status.IsReadingPaused == false)
+                if (this.madline.State.IsReadingPaused == false)
                 {
                     this.ReadProcess();
                 }
@@ -113,6 +115,8 @@
         [TestMethod]
         public void MassiveThreadTest(int times)
         {
+            var sw = new Stopwatch();
+            sw.Start();
             this.writeTimes = times;
             this.readTimes = times;
             var writeThread = new Thread(this.StartWrite);
@@ -121,13 +125,36 @@
             writeThread.Start();
             readThread.Join();
             writeThread.Join();
+            sw.Stop();
             using (var readFile = new StreamWriter(@"..\MassiveThreadTest.txt", true))
             {
-                readFile.WriteLine("Times = {0}, writtenBytes = {1}, readBytes = {2}",
-                    times, this.writtenBytes, this.readBytes);
+                readFile.WriteLine("Times = {0}, writtenBytes = {1}, readBytes = {2}, \nTime = {3} millisecond",
+                    times, this.writtenBytes, this.readBytes, sw.ElapsedMilliseconds);
             }
             Assert.AreEqual(this.writtenBytes, this.readBytes);
         }
 
+        [TestMethod]
+        [DataRow(1000000)]
+        public void SuperMassiveThreadTest(int times)
+        {
+            var sw = new Stopwatch();
+            sw.Start();
+            this.writeTimes = times;
+            this.readTimes = times;
+            var writeThread = new Thread(this.StartWrite);
+            var readThread = new Thread(this.StartRead);
+            readThread.Start();
+            writeThread.Start();
+            readThread.Join();
+            writeThread.Join();
+            sw.Stop();
+            using (var readFile = new StreamWriter(@"..\MassiveThreadTest.txt", true))
+            {
+                readFile.WriteLine("Times = {0}, writtenBytes = {1}, readBytes = {2}, \nTime = {3} millisecond",
+                    times, this.writtenBytes, this.readBytes, sw.ElapsedMilliseconds);
+            }
+            Assert.AreEqual(this.writtenBytes, this.readBytes);
+        }
     }
 }

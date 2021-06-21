@@ -49,15 +49,13 @@ namespace Tests
         {
             var header = new Header(bodyLength, false, false);
             var headerBytes = header.Span.ToArray();
-            var body = new byte[bodyLength];
-            // 임의의 정보를 갖는 바디를 채워준다.
-            for (var i = 0; i < body.Length; ++i)
-            {
-                body[i] = (byte)r.Next(256);
-            }
             var array = new byte[bodyLength + 2];
             Array.Copy(headerBytes, array, headerBytes.Length);
-            Array.Copy(body, 0, array, headerBytes.Length, body.Length);
+            // 임의의 정보를 갖는 바디를 채워준다.
+            for (var i = 2; i < bodyLength+2; ++i)
+            {
+                array[i] = (byte)r.Next(256);
+            }
 
             return new ReadOnlyMemory<byte>(array);
         }

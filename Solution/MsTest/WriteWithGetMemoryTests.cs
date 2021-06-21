@@ -1,4 +1,7 @@
-﻿namespace Tests
+﻿using System.Buffers;
+using System.Diagnostics;
+
+namespace Tests
 {
     using MadPipeline;
     using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -33,7 +36,7 @@
         {
             while (this.writeTimes > 0)
             {
-                if (this.madline.Status.IsWritingPaused == false)
+                if (this.madline.State.IsWritingPaused == false)
                 {
                     this.WriteProcess();
                 }
@@ -49,12 +52,13 @@
         {
             while (this.readTimes > 0)
             {
-                if (this.madline.Status.IsReadingPaused == false)
+                if (this.madline.State.IsReadingPaused == false)
                 {
                     this.ReadProcess();
                 }
                 else
                 {
+                    // 뭔가 들어오기를 대기해준다
                     Thread.Sleep(1);
                 }
             }
@@ -62,6 +66,7 @@
 
         public void WriteProcess()
         {
+            // 평균적으로 1kb
             var number = r.Next(20, 2000);
 
             var memory = this.madWriter.GetMemory(number + 2);
@@ -79,6 +84,9 @@
                 this.madWriter.WriteSignal().OnCompleted(
                     () =>
                     {
+                        this.madWriter.Advance(number+2);
+                        this.writtenBytes += number + 2;
+                        this.madWriter.Flush();
                         this.WriteProcess();
                     });
             }
@@ -89,9 +97,7 @@
             var resultInt = this.madReader.TryRead(out var result);
             if (resultInt > 0)
             {
-                Interlocked.Add(ref this.readTimes, -1);
-                this.readBytes += result.Length;
-                this.madReader.AdvanceTo(result.End);
+                this.SendToSocket(in result);
                 if (resultInt == 1)
                 {
                     // 아직 읽을 게 남은 경우이므로 다시 읽기 시도
@@ -103,11 +109,15 @@
                 this.madReader.DoRead().Then(
                     readResult =>
                     {
-                        Interlocked.Add(ref this.readTimes, -1);
-                        this.readBytes += readResult.Length;
-                        this.madReader.AdvanceTo(readResult.End);
+                        this.SendToSocket(in readResult);
                     });
             }
+        }
+        public void SendToSocket(in ReadOnlySequence<byte> result)
+        {
+            Interlocked.Add(ref this.readTimes, -1);
+            this.readBytes += result.Length;
+            this.madReader.AdvanceTo(result.End);
         }
 
         [DataRow(10)]
@@ -117,6 +127,9 @@
         [TestMethod]
         public void MassiveGetMemoryTest(int times)
         {
+            var sw = new Stopwatch();
+            sw.Start();
+            
             this.writeTimes = times;
             this.readTimes = times;
             var writeThread = new Thread(this.StartWrite);
@@ -125,13 +138,37 @@
             writeThread.Start();
             readThread.Join();
             writeThread.Join();
+            sw.Stop();
             using (var readFile = new StreamWriter(@"..\MassiveGetMemoryTest.txt", true))
             {
-                readFile.WriteLine("Times = {0}, writtenBytes = {1}, readBytes = {2}",
-                    times, this.writtenBytes, this.readBytes);
+                readFile.WriteLine("Times = {0}, writtenBytes = {1}, readBytes = {2}, \nTime = {3} millisecond",
+                    times, this.writtenBytes, this.readBytes, sw.ElapsedMilliseconds);
             }
             Assert.AreEqual(this.writtenBytes, this.readBytes);
         }
+        
+        [TestMethod]
+        [DataRow(1000000)]
+        public void SuperMassiveGetMemoryTest(int times)
+        {
+            var sw = new Stopwatch();
+            sw.Start();
 
+            this.writeTimes = times;
+            this.readTimes = times;
+            var writeThread = new Thread(this.StartWrite);
+            var readThread = new Thread(this.StartRead);
+            readThread.Start();
+            writeThread.Start();
+            readThread.Join();
+            writeThread.Join();
+            sw.Stop();
+            using (var readFile = new StreamWriter(@"..\MassiveGetMemoryTest.txt", true))
+            {
+                readFile.WriteLine("Times = {0}, writtenBytes = {1}, readBytes = {2}, \nTime = {3} millisecond",
+                    times, this.writtenBytes, this.readBytes, sw.ElapsedMilliseconds);
+            }
+            Assert.AreEqual(this.writtenBytes, this.readBytes);
+        }
     }
 }
