@@ -58,14 +58,17 @@
         public void WriteProcess()
         {
             // 평균적으로 1kb
-            var number = r.Next(20, 2000);
-
-            var rawSource = CreateMessageWithRandomBody(number);
-            var memory = this.madWriter.GetMemory(0);
-            this.madWriter.CopyToWriteHead(in rawSource, in memory);
-            this.writtenBytes += number + 2;
-            Interlocked.Add(ref this.writeTimes, -1);
-            if (this.madWriter.TryAdvance(number + 2) == false)
+            if (this.madWriter.CheckForCopy())
+            {
+                var number = r.Next(20, 2000);
+                var rawSource = CreateMessageWithRandomBody(number);
+                this.madWriter.GetMemory(0);
+                this.madWriter.CopyToWriteHead(in rawSource);
+                this.madWriter.Flush();
+                this.writtenBytes += number + 2;
+                Interlocked.Add(ref this.writeTimes, -1);
+            }
+            else
             {
                 this.madWriter.WriteSignal().OnCompleted(
                     () =>
@@ -73,7 +76,7 @@
                         this.WriteProcess();
                     });
             }
-            this.madWriter.Flush();
+
         }
         // WriteProcess()를 통해 기록된 것을 읽고 구문분석
         public void ReadProcess()

@@ -328,6 +328,8 @@ namespace MadPipeline
                     this.ReturnSegment(returnStart);
                     returnStart = next;
                 }
+
+                this.operationState.EndRead();
             }
             // 쓰는 중이거나 threshold넘어 pause된 경우라면 resume까지 쓰는걸 막음
             if (this.operationState.IsWritingActive == false
@@ -337,7 +339,6 @@ namespace MadPipeline
                 this.Callback.WriteSignal.Reset();
             }
 
-            this.operationState.EndRead();
         }
 
         private void MoveReturnEndToNextBlock(ref BufferSegment? returnEnd)
@@ -438,38 +439,40 @@ namespace MadPipeline
             
             this.AllocateWriteHead(0);
 
-            this.CopyToWriteHead(in source, in this.writingHeadMemory);
+            this.CopyToWriteHead(in source);
 
             this.Flush();
 
             return true;
         }
 
-        
-        public bool TryAdvance(int bytesWritten)
+        public bool CheckForCopy()
         {
-            if (this.unconsumedBytes < this.pauseWriterThreshold ||
-                this.isReaderCompleted)
+            if (this.operationState.IsWritingPaused)
             {
-                return true;
+                return false;
             }
-            this.operationState.PauseWrite();
-            return false;
+
+            if (this.isWriterCompleted)
+            {
+                throw new Exception("No Writing Allowed");
+            }
+
+            return true;
         }
+        
 
 
 
-
-
-        public void CopyToWriteHead(in ReadOnlyMemory<byte> source, in Memory<byte> memory)
+        public void CopyToWriteHead(in ReadOnlyMemory<byte> source)
         {
             lock (this.sync)
             {
                 var sourceLength = source.Length;
-                if (sourceLength <= memory.Length)
+                if (sourceLength <= this.writingHeadMemory.Length)
                 {
                     // 세그먼트 하나에 쓰는 경우
-                    source.CopyTo(memory);
+                    source.CopyTo(this.writingHeadMemory);
 
                     this.Advance(sourceLength);
                 }
@@ -478,7 +481,7 @@ namespace MadPipeline
                     // 세그먼트를 넘어가며 써야하는 경우
                     Debug.Assert(this.writingHead != null);
                     var sourceSpan = source.Span;
-                    var destination = memory.Span;
+                    var destination = this.writingHeadMemory.Span;
 
                     while (true)
                     {
@@ -502,7 +505,7 @@ namespace MadPipeline
                         this.writingHead.SetNext(newSegment);
                         this.writingHead = newSegment;
 
-                        destination = memory.Span;
+                        destination = this.writingHeadMemory.Span;
                     }
                 }
             }

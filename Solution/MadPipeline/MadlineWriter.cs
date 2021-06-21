@@ -10,8 +10,8 @@
         public Signal WriteSignal();
         public bool Flush();
         public void CompleteWriter();
-        public bool TryAdvance(int bytesWritten);
-        public void CopyToWriteHead(in ReadOnlyMemory<byte> source, in Memory<byte> memory);
+        public bool CheckForCopy();
+        public void CopyToWriteHead(in ReadOnlyMemory<byte> source);
 
 
     }
