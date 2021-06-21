@@ -1,10 +1,9 @@
-﻿using System.Diagnostics;
-
-namespace Tests
+﻿namespace Tests
 {
+    using System.Buffers;
     using MadPipeline;
     using Microsoft.VisualStudio.TestTools.UnitTesting;
-    using System;
+    using System.Diagnostics;
     using System.IO;
     using System.Threading;
 
@@ -39,11 +38,6 @@ namespace Tests
                 {
                     this.WriteProcess();
                 }
-                else
-                {
-                    // 읽기를 대기해준다
-                    Thread.Sleep(1);
-                }
             }
         }
 
@@ -54,10 +48,6 @@ namespace Tests
                 if (this.madline.State.IsReadingPaused == false)
                 {
                     this.ReadProcess();
-                }
-                else
-                {
-                    Thread.Sleep(1);
                 }
             }
         }
@@ -81,15 +71,13 @@ namespace Tests
                 this.writtenBytes += number + 2;
             }
         }
-        // WriteProcess()를 통해 기록된 것을 읽고 구문분석
+        // WriteProcess()를 통해 기록된 것을 읽고 이용
         public void ReadProcess()
         {
             var resultInt = this.madReader.TryRead(out var result);
             if (resultInt > 0)
             {
-                Interlocked.Add(ref this.readTimes, -1);
-                this.readBytes += result.Length;
-                this.madReader.AdvanceTo(result.End);
+                this.SendToSocket(in result);
                 if (resultInt == 1)
                 {
                     // 아직 읽을 게 남은 경우이므로 다시 읽기 시도
@@ -101,13 +89,17 @@ namespace Tests
                 this.madReader.DoRead().Then(
                     readResult =>
                     {
-                        Interlocked.Add(ref this.readTimes, -1);
-                        this.readBytes += readResult.Length;
-                        this.madReader.AdvanceTo(readResult.End);
+                        this.SendToSocket(in readResult);
                     });
             }
         }
-        
+        public void SendToSocket(in ReadOnlySequence<byte> result)
+        {
+            Interlocked.Add(ref this.readTimes, -1);
+            this.readBytes += result.Length;
+            this.madReader.AdvanceTo(result.End);
+        }
+
         [DataRow(10)]
         [DataRow(100)]
         [DataRow(1000)]

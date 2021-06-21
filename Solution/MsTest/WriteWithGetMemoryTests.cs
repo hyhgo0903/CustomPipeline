@@ -1,11 +1,9 @@
-﻿using System.Buffers;
-using System.Diagnostics;
-
-namespace Tests
+﻿namespace Tests
 {
     using MadPipeline;
     using Microsoft.VisualStudio.TestTools.UnitTesting;
-    using System;
+    using System.Buffers;
+    using System.Diagnostics;
     using System.IO;
     using System.Threading;
 
@@ -36,14 +34,11 @@ namespace Tests
         {
             while (this.writeTimes > 0)
             {
+                // 이러면 콜백쓰는 의미가 있을까 싶기도 하지만
+                // 스레
                 if (this.madline.State.IsWritingPaused == false)
                 {
                     this.WriteProcess();
-                }
-                else
-                {
-                    // 읽기를 대기해준다
-                    Thread.Sleep(1);
                 }
             }
         }
@@ -56,11 +51,6 @@ namespace Tests
                 {
                     this.ReadProcess();
                 }
-                else
-                {
-                    // 뭔가 들어오기를 대기해준다
-                    Thread.Sleep(1);
-                }
             }
         }
 
@@ -69,27 +59,20 @@ namespace Tests
             // 평균적으로 1kb
             var number = r.Next(20, 2000);
 
-            var memory = this.madWriter.GetMemory(number + 2);
-
             var rawSource = CreateMessageWithRandomBody(number);
-            rawSource.CopyTo(memory);
+            var memory = this.madWriter.GetMemory(number + 2);
+            this.madline.CopyToWriteHead(in rawSource, in memory);
+            this.writtenBytes += number + 2;
             Interlocked.Add(ref this.writeTimes, -1);
-            if (this.madWriter.TryAdvance(number + 2))
-            {
-                this.writtenBytes += number + 2;
-                this.madWriter.Flush();
-            }
-            else
+            if (this.madWriter.TryAdvance(number + 2) == false)
             {
                 this.madWriter.WriteSignal().OnCompleted(
                     () =>
                     {
-                        this.madWriter.Advance(number+2);
-                        this.writtenBytes += number + 2;
-                        this.madWriter.Flush();
                         this.WriteProcess();
                     });
             }
+            this.madWriter.Flush();
         }
         // WriteProcess()를 통해 기록된 것을 읽고 구문분석
         public void ReadProcess()
@@ -113,6 +96,7 @@ namespace Tests
                     });
             }
         }
+
         public void SendToSocket(in ReadOnlySequence<byte> result)
         {
             Interlocked.Add(ref this.readTimes, -1);

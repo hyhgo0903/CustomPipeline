@@ -237,16 +237,14 @@ namespace MadPipeline
 
         public bool TryAdvance(int bytesWritten)
         {
-            if (this.pauseWriterThreshold > 0 &&
-                this.unconsumedBytes >= this.pauseWriterThreshold &&
-                !this.isReaderCompleted)
+            if (this.pauseWriterThreshold <= 0 || this.unconsumedBytes < this.pauseWriterThreshold ||
+                this.isReaderCompleted)
             {
-                this.operationState.PauseWrite();
-                return false;
-            }
+                return true;
 
-            this.Advance(bytesWritten);
-            return true;
+            }
+            this.operationState.PauseWrite();
+            return false;
         }
 
 
@@ -454,12 +452,21 @@ namespace MadPipeline
             
             this.AllocateWriteHead(0);
 
+            this.CopyToWriteHead(in source, in this.writingHeadMemory);
+
+            this.Flush();
+
+            return true;
+        }
+
+        public void CopyToWriteHead(in ReadOnlyMemory<byte> source, in Memory<byte> memory)
+        {
             lock (sync)
             {
-                if (source.Length <= this.writingHeadMemory.Length)
+                if (source.Length <= memory.Length)
                 {
                     // 세그먼트 하나에 쓰는 경우
-                    source.CopyTo(this.writingHeadMemory);
+                    source.CopyTo(memory);
 
                     this.Advance(source.Length);
                 }
@@ -468,7 +475,7 @@ namespace MadPipeline
                     // 세그먼트를 넘어가며 써야하는 경우
                     Debug.Assert(this.writingHead != null);
                     var sourceSpan = source.Span;
-                    var destination = this.writingHeadMemory.Span;
+                    var destination = memory.Span;
 
                     while (true)
                     {
@@ -492,13 +499,10 @@ namespace MadPipeline
                         this.writingHead.SetNext(newSegment);
                         this.writingHead = newSegment;
 
-                        destination = this.writingHeadMemory.Span;
+                        destination = memory.Span;
                     }
                 }
             }
-            this.Flush();
-
-            return true;
         }
 
         public Signal WriteSignal()
