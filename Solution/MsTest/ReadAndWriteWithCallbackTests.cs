@@ -83,6 +83,8 @@
             {
                 this.WriteProcess();
             }
+
+            Assert.IsTrue(this.Madline.State.IsWritingPaused);
             
             this.MadReader.TryRead(out var result);
             this.MadReader.AdvanceTo(result.End);
@@ -93,7 +95,7 @@
 
             // 100번 WriteProcess 실행 + 예약된 쓰기시 WriteProcess 한 번 진입
             Assert.AreEqual(101, this.writeProcessPassed);
-
+            Assert.IsFalse(this.Madline.State.IsWritingPaused);
             // 이 이후로도 읽기 쓰기 잘되나 한번 확인용
             this.WriteProcess();
             this.ReadProcess();

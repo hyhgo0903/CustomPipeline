@@ -11,5 +11,8 @@
         public bool Flush();
         public void CompleteWriter();
         public bool TryAdvance(int bytesWritten);
+        public void CopyToWriteHead(in ReadOnlyMemory<byte> source, in Memory<byte> memory);
+
+
     }
 }

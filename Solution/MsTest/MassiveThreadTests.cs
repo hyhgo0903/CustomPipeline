@@ -127,7 +127,7 @@
         }
 
         [TestMethod]
-        [DataRow(1000000)]
+        [DataRow(10000000)]
         public void SuperMassiveThreadTest(int times)
         {
             var sw = new Stopwatch();

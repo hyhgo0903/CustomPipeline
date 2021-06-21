@@ -35,7 +35,8 @@
             while (this.writeTimes > 0)
             {
                 // 이러면 콜백쓰는 의미가 있을까 싶기도 하지만
-                // 스레
+                // 콜백까지 쓰레드 대기(혹은 죽이기) -> 깨우기(혹은 새 스레드 생성)
+                // 보다 성능상 유리할것으로 판단(최소한 테스트 환경에서)
                 if (this.madline.State.IsWritingPaused == false)
                 {
                     this.WriteProcess();
@@ -60,8 +61,8 @@
             var number = r.Next(20, 2000);
 
             var rawSource = CreateMessageWithRandomBody(number);
-            var memory = this.madWriter.GetMemory(number + 2);
-            this.madline.CopyToWriteHead(in rawSource, in memory);
+            var memory = this.madWriter.GetMemory(0);
+            this.madWriter.CopyToWriteHead(in rawSource, in memory);
             this.writtenBytes += number + 2;
             Interlocked.Add(ref this.writeTimes, -1);
             if (this.madWriter.TryAdvance(number + 2) == false)
@@ -132,7 +133,7 @@
         }
         
         [TestMethod]
-        [DataRow(1000000)]
+        [DataRow(10000000)]
         public void SuperMassiveGetMemoryTest(int times)
         {
             var sw = new Stopwatch();

@@ -87,7 +87,7 @@ namespace Tests
         public void FirstWriteTest()
         {
             this.writeThread.Start();
-            Thread.Sleep(10);
+            Thread.Sleep(1);
             this.readThread.Start();
             this.writeThread.Join();
             this.readThread.Join();
@@ -99,7 +99,7 @@ namespace Tests
         public void FirstReadTest()
         {
             this.readThread.Start();
-            Thread.Sleep(10);
+            Thread.Sleep(1);
             this.writeThread.Start();
             this.writeThread.Join();
             this.readThread.Join();

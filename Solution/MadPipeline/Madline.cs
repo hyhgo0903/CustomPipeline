@@ -1,4 +1,5 @@
-﻿using MadPipeline.Thread;
+﻿using System.Data.Common;
+using MadPipeline.Thread;
 
 namespace MadPipeline
 {
@@ -235,18 +236,6 @@ namespace MadPipeline
 
         #region Advance
 
-        public bool TryAdvance(int bytesWritten)
-        {
-            if (this.pauseWriterThreshold <= 0 || this.unconsumedBytes < this.pauseWriterThreshold ||
-                this.isReaderCompleted)
-            {
-                return true;
-
-            }
-            this.operationState.PauseWrite();
-            return false;
-        }
-
 
         public void Advance(int bytesWritten)
         {
@@ -254,13 +243,10 @@ namespace MadPipeline
             {
                 return;
             }
-
-            lock (this.sync)
-            {
-                this.notFlushedBytes += bytesWritten;
-                this.writingHeadBytesBuffered += bytesWritten;
-                this.writingHeadMemory = this.writingHeadMemory[bytesWritten..];
-            }
+            
+            this.notFlushedBytes += bytesWritten;
+            this.writingHeadBytesBuffered += bytesWritten;
+            this.writingHeadMemory = this.writingHeadMemory[bytesWritten..];
         }
 
         public void AdvanceTo(in SequencePosition consumed)
@@ -459,16 +445,33 @@ namespace MadPipeline
             return true;
         }
 
+        
+        public bool TryAdvance(int bytesWritten)
+        {
+            if (this.unconsumedBytes < this.pauseWriterThreshold ||
+                this.isReaderCompleted)
+            {
+                return true;
+            }
+            this.operationState.PauseWrite();
+            return false;
+        }
+
+
+
+
+
         public void CopyToWriteHead(in ReadOnlyMemory<byte> source, in Memory<byte> memory)
         {
-            lock (sync)
+            lock (this.sync)
             {
-                if (source.Length <= memory.Length)
+                var sourceLength = source.Length;
+                if (sourceLength <= memory.Length)
                 {
                     // 세그먼트 하나에 쓰는 경우
                     source.CopyTo(memory);
 
-                    this.Advance(source.Length);
+                    this.Advance(sourceLength);
                 }
                 else
                 {
@@ -543,7 +546,7 @@ namespace MadPipeline
         {
             lock (this.sync)
             {
-                if (this.unconsumedBytes < 2 || this.operationState.IsReadingPaused == true
+                if (this.unconsumedBytes < 2 || this.operationState.IsReadingPaused
                 || this.readHead == null || this.readTail == null)
                 {
                     this.operationState.PauseRead();

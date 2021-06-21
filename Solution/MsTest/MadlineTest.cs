@@ -54,7 +54,7 @@ namespace Tests
             // 임의의 정보를 갖는 바디를 채워준다.
             for (var i = 2; i < bodyLength+2; ++i)
             {
-                array[i] = (byte)r.Next(256);
+                array[i] = (byte) r.Next(256);
             }
 
             return new ReadOnlyMemory<byte>(array);
