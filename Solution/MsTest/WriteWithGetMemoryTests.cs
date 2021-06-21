@@ -129,7 +129,7 @@
             sw.Stop();
             using (var readFile = new StreamWriter(@"..\MassiveGetMemoryTest.txt", true))
             {
-                readFile.WriteLine("Times = {0}, writtenBytes = {1}, readBytes = {2}, \nTime = {3} millisecond",
+                readFile.WriteLine("Times = {0},\twrittenBytes = {1},\treadBytes = {2},\nTime = {3} millisecond",
                     times, this.writtenBytes, this.readBytes, sw.ElapsedMilliseconds);
             }
             Assert.AreEqual(this.writtenBytes, this.readBytes);
@@ -153,7 +153,7 @@
             sw.Stop();
             using (var readFile = new StreamWriter(@"..\MassiveGetMemoryTest.txt", true))
             {
-                readFile.WriteLine("Times = {0}, writtenBytes = {1}, readBytes = {2}, \nTime = {3} millisecond",
+                readFile.WriteLine("Times = {0},\twrittenBytes = {1},\treadBytes = {2},\nTime = {3} millisecond",
                     times, this.writtenBytes, this.readBytes, sw.ElapsedMilliseconds);
             }
             Assert.AreEqual(this.writtenBytes, this.readBytes);

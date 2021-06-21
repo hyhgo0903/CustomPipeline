@@ -71,9 +71,9 @@ namespace MadPipeline
             this.Callback = new MadlineCallbacks();
             this.sync = new object();
 
-            this.syncEvents = new SyncEvents();
-            this.Producer = new Producer(this.syncEvents, this.operationState);
-            this.Consumer = new Consumer(this.syncEvents, this.operationState);
+            //this.syncEvents = new SyncEvents();
+            //this.Producer = new Producer(this.syncEvents, this.operationState);
+            //this.Consumer = new Consumer(this.syncEvents, this.operationState);
         }
 
         public long Length => this.unconsumedBytes;
@@ -89,9 +89,9 @@ namespace MadPipeline
         
         // 일단 스레드 region에서 수정 중이라 순서는 완료되고 나서 정상화
 
-        private Consumer Consumer { get; }
-        private Producer Producer { get; }
-        private SyncEvents syncEvents;
+        //private Consumer Consumer { get; }
+        //private Producer Producer { get; }
+        //private SyncEvents syncEvents;
 
         //private bool CheckWriterThread()
         //{

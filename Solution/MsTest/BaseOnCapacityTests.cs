@@ -1,25 +1,25 @@
 ﻿namespace Tests
 {
-    using System.Buffers;
     using MadPipeline;
     using Microsoft.VisualStudio.TestTools.UnitTesting;
+    using System.Buffers;
     using System.Diagnostics;
     using System.IO;
     using System.Threading;
 
     [TestClass]
-    public sealed class MassiveThreadTests : MadlineTest
+    public sealed class BaseOnCapacity : MadlineTest
     {
         private readonly Madline madline;
         private readonly IMadlineWriter madWriter;
         private readonly IMadlineReader madReader;
 
-        private int writeTimes;
-        private int readTimes;
+        private int leftoverBytes;
         private long writtenBytes;
         private long readBytes;
+        private bool endReader;
 
-        public MassiveThreadTests()
+        public BaseOnCapacity()
         {
             // 기존의 Threshold 가진 madline으로 테스트를 진행했습니다.
             var malineOptions = new MadlineOptions();
@@ -32,7 +32,7 @@
 
         public void StartWrite()
         {
-            while (this.writeTimes > 0)
+            while (this.leftoverBytes > 0)
             {
                 if (this.madline.State.IsWritingPaused == false)
                 {
@@ -43,35 +43,44 @@
 
         public void StartRead()
         {
-            while (this.readTimes > 0)
+            do
             {
                 if (this.madline.State.IsReadingPaused == false)
                 {
                     this.ReadProcess();
                 }
-            }
+            } while (this.endReader == false);
         }
 
         public void WriteProcess()
         {
-            var number = r.Next(20, 2000);
-            var rawSource = CreateMessageWithRandomBody(number);
-            if (this.madWriter.TryWrite(rawSource) == false)
+            // 평균적으로 1kb
+            if (this.madWriter.CheckForCopy())
             {
-                // TryWrite에 실패한다면 이 함수를 액션으로 예약
+                var number = r.Next(20, 2000);
+                // 헤더 포함해서 이정도 이하 남으면 1GB까지 맞게 딱코딱뎀
+                if (this.leftoverBytes < 2002)
+                {
+                    number = this.leftoverBytes - 2;
+                }
+                var rawSource = CreateMessageWithRandomBody(number);
+                this.madWriter.GetMemory(0);
+                this.madWriter.CopyToWriteHead(in rawSource);
+                this.madWriter.Flush();
+                this.writtenBytes += number + 2;
+                Interlocked.Add(ref this.leftoverBytes, -number-2);
+            }
+            else
+            {
                 this.madWriter.WriteSignal().OnCompleted(
                     () =>
                     {
                         this.WriteProcess();
                     });
             }
-            else
-            {
-                Interlocked.Add(ref this.writeTimes, -1);
-                this.writtenBytes += number + 2;
-            }
+
         }
-        // WriteProcess()를 통해 기록된 것을 읽고 이용
+        // WriteProcess()를 통해 기록된 것을 읽고 구문분석
         public void ReadProcess()
         {
             var resultInt = this.madReader.TryRead(out var result);
@@ -93,60 +102,37 @@
                     });
             }
         }
+
         public void SendToSocket(in ReadOnlySequence<byte> result)
         {
-            Interlocked.Add(ref this.readTimes, -1);
             this.readBytes += result.Length;
             this.madReader.AdvanceTo(result.End);
         }
-
-        [DataRow(10)]
-        [DataRow(100)]
-        [DataRow(1000)]
-        [DataRow(10000)]
+        
+        // 1GB
+        [DataRow(1073741824)]
         [TestMethod]
-        public void MassiveThreadTest(int times)
+        public void BaseOnCapacityTest(int capacity)
         {
             var sw = new Stopwatch();
             sw.Start();
-            this.writeTimes = times;
-            this.readTimes = times;
+
+            this.leftoverBytes = capacity;
             var writeThread = new Thread(this.StartWrite);
             var readThread = new Thread(this.StartRead);
             readThread.Start();
             writeThread.Start();
-            readThread.Join();
             writeThread.Join();
-            sw.Stop();
-            using (var readFile = new StreamWriter(@"..\MassiveThreadTest.txt", true))
-            {
-                readFile.WriteLine("Times = {0},\twrittenBytes = {1},\treadBytes = {2},\nTime = {3} millisecond",
-                    times, this.writtenBytes, this.readBytes, sw.ElapsedMilliseconds);
-            }
-            Assert.AreEqual(this.writtenBytes, this.readBytes);
-        }
-
-        [TestMethod]
-        [DataRow(10000000)]
-        public void SuperMassiveThreadTest(int times)
-        {
-            var sw = new Stopwatch();
-            sw.Start();
-            this.writeTimes = times;
-            this.readTimes = times;
-            var writeThread = new Thread(this.StartWrite);
-            var readThread = new Thread(this.StartRead);
-            readThread.Start();
-            writeThread.Start();
+            this.madWriter.CompleteWriter();
+            this.endReader = true;
             readThread.Join();
-            writeThread.Join();
             sw.Stop();
-            using (var readFile = new StreamWriter(@"..\MassiveThreadTest.txt", true))
+            using (var readFile = new StreamWriter(@"..\1GBTest.txt", true))
             {
-                readFile.WriteLine("Times = {0},\twrittenBytes = {1},\treadBytes = {2},\nTime = {3} millisecond",
-                    times, this.writtenBytes, this.readBytes, sw.ElapsedMilliseconds);
+                readFile.WriteLine("Capacity = {0},\twrittenBytes = {1},\treadBytes = {2},\nTime = {3} millisecond",
+                    capacity, this.writtenBytes, this.readBytes, sw.ElapsedMilliseconds);
             }
-            Assert.AreEqual(this.writtenBytes, this.readBytes);
+            Assert.AreEqual(capacity, this.readBytes);
         }
     }
 }
