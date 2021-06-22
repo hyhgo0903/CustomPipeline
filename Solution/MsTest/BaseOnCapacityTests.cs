@@ -55,7 +55,7 @@
         public void WriteProcess()
         {
             // 평균적으로 1kb
-            if (this.madWriter.CheckForCopy())
+            if (this.madWriter.TryAdvance())
             {
                 var number = r.Next(20, 2000);
                 // 헤더 포함해서 이정도 이하 남으면 딱코딱뎀 맞춰준다

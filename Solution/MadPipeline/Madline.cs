@@ -443,7 +443,7 @@
             return true;
         }
 
-        public bool CheckForCopy()
+        public bool TryAdvance()
         {
             if (this.operationState.IsWritingPaused)
             {

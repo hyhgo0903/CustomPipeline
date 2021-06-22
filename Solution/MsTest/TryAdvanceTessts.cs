@@ -8,18 +8,18 @@
     using System.Threading;
 
     [TestClass]
-    public sealed class FileStreamTests : MadlineTest
+    public sealed class WriteWithGetMemoryTests : MadlineTest
     {
         private readonly Madline madline;
         private readonly IMadlineWriter madWriter;
         private readonly IMadlineReader madReader;
 
-        private int leftoverBytes;
+        private int writeTimes;
+        private int readTimes;
         private long writtenBytes;
         private long readBytes;
-        private bool endReader;
 
-        public FileStreamTests()
+        public WriteWithGetMemoryTests()
         {
             // 기존의 Threshold 가진 madline으로 테스트를 진행했습니다.
             var malineOptions = new MadlineOptions();
@@ -32,8 +32,11 @@
 
         public void StartWrite()
         {
-            while (this.leftoverBytes > 0)
+            while (this.writeTimes > 0)
             {
+                // 이러면 콜백쓰는 의미가 있을까 싶기도 하지만
+                // 콜백까지 쓰레드 대기(혹은 죽이기) -> 깨우기(혹은 새 스레드 생성)
+                // 보다 성능상 유리할것으로 판단(최소한 테스트 환경에서)
                 if (this.madline.State.IsWritingPaused == false)
                 {
                     this.WriteProcess();
@@ -43,13 +46,13 @@
 
         public void StartRead()
         {
-            do
+            while (this.readTimes > 0)
             {
                 if (this.madline.State.IsReadingPaused == false)
                 {
                     this.ReadProcess();
                 }
-            } while (this.endReader == false);
+            }
         }
 
         public void WriteProcess()
@@ -58,17 +61,12 @@
             if (this.madWriter.TryAdvance())
             {
                 var number = r.Next(20, 2000);
-                // 헤더 포함해서 이정도 이하 남으면 딱코딱뎀 맞춰준다
-                if (this.leftoverBytes < 2002)
-                {
-                    number = this.leftoverBytes - 2;
-                }
                 var rawSource = CreateMessageWithRandomBody(number);
                 this.madWriter.GetMemory();
                 this.madWriter.CopyToWriteHead(in rawSource);
                 this.madWriter.Flush();
                 this.writtenBytes += number + 2;
-                Interlocked.Add(ref this.leftoverBytes, -number-2);
+                Interlocked.Add(ref this.writeTimes, -1);
             }
             else
             {
@@ -86,7 +84,7 @@
             var resultInt = this.madReader.TryRead(out var result);
             if (resultInt > 0)
             {
-                this.SendToFile(in result);
+                this.SendToSocket(in result);
                 if (resultInt == 1)
                 {
                     // 아직 읽을 게 남은 경우이므로 다시 읽기 시도
@@ -98,41 +96,67 @@
                 this.madReader.DoRead().Then(
                     readResult =>
                     {
-                        this.SendToFile(in readResult);
+                        this.SendToSocket(in readResult);
                     });
             }
         }
 
-        public void SendToFile(in ReadOnlySequence<byte> result)
+        public void SendToSocket(in ReadOnlySequence<byte> result)
         {
-            using (var readFile = new StreamWriter(@"..\FileStream.txt", true))
-            {
-                var messageArr = result.ToArray();
-                foreach (var message in messageArr)
-                {
-                    string format = message.ToString("B");
-                    readFile.Write(format);
-                }
-                //readFile.WriteLine(); 
-            }
+            Interlocked.Add(ref this.readTimes, -1);
             this.readBytes += result.Length;
             this.madReader.AdvanceTo(result.End);
         }
-        
-        [DataRow(50000)]
+
+        [DataRow(10)]
+        [DataRow(100)]
+        [DataRow(1000)]
+        [DataRow(10000)]
         [TestMethod]
-        public void FileStreamTest(int capacity)
+        public void MassiveGetMemoryTest(int times)
         {
-            this.leftoverBytes = capacity;
+            var sw = new Stopwatch();
+            sw.Start();
+            
+            this.writeTimes = times;
+            this.readTimes = times;
             var writeThread = new Thread(this.StartWrite);
             var readThread = new Thread(this.StartRead);
             readThread.Start();
             writeThread.Start();
-            writeThread.Join();
-            this.madWriter.CompleteWriter();
-            this.endReader = true;
             readThread.Join();
-            Assert.AreEqual(capacity, this.readBytes);
+            writeThread.Join();
+            sw.Stop();
+            using (var readFile = new StreamWriter(@"..\MassiveGetMemoryTest.txt", true))
+            {
+                readFile.WriteLine("Times = {0},\twrittenBytes = {1},\treadBytes = {2},\nTime = {3} millisecond",
+                    times, this.writtenBytes, this.readBytes, sw.ElapsedMilliseconds);
+            }
+            Assert.AreEqual(this.writtenBytes, this.readBytes);
+        }
+        
+        [TestMethod]
+        [DataRow(10000000)]
+        public void SuperMassiveGetMemoryTest(int times)
+        {
+            var sw = new Stopwatch();
+            sw.Start();
+
+            this.writeTimes = times;
+            this.readTimes = times;
+            var writeThread = new Thread(this.StartWrite);
+            var readThread = new Thread(this.StartRead);
+            readThread.Start();
+            writeThread.Start();
+            readThread.Join();
+            writeThread.Join();
+            sw.Stop();
+            using (var readFile = new StreamWriter(@"..\MassiveGetMemoryTest.txt", true))
+            {
+                readFile.WriteLine("Times = {0},\twrittenBytes = {1},\treadBytes = {2},\nTime = {3} millisecond",
+                    times, this.writtenBytes, this.readBytes, sw.ElapsedMilliseconds);
+            }
+            Assert.AreEqual(this.writtenBytes, this.readBytes);
         }
     }
 }

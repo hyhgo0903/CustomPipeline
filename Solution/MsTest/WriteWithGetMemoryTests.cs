@@ -8,7 +8,7 @@
     using System.Threading;
 
     [TestClass]
-    public sealed class WriteWithGetMemoryTests : MadlineTest
+    public sealed class TryAdvanceTests : MadlineTest
     {
         private readonly Madline madline;
         private readonly IMadlineWriter madWriter;
@@ -19,7 +19,7 @@
         private long writtenBytes;
         private long readBytes;
 
-        public WriteWithGetMemoryTests()
+        public TryAdvanceTests()
         {
             // 기존의 Threshold 가진 madline으로 테스트를 진행했습니다.
             var malineOptions = new MadlineOptions();
@@ -58,7 +58,7 @@
         public void WriteProcess()
         {
             // 평균적으로 1kb
-            if (this.madWriter.CheckForCopy())
+            if (this.madWriter.TryAdvance())
             {
                 var number = r.Next(20, 2000);
                 var rawSource = CreateMessageWithRandomBody(number);
