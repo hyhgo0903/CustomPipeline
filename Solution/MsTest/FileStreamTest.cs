@@ -110,7 +110,7 @@
                 var messageArr = result.ToArray();
                 foreach (var message in messageArr)
                 {
-                    string format = message.ToString("B");
+                    string format = message.ToString("X");
                     readFile.Write(format);
                 }
                 //readFile.WriteLine(); 
