@@ -62,7 +62,7 @@
             {
                 var number = r.Next(20, 2000);
                 var rawSource = CreateMessageWithRandomBody(number);
-                this.madWriter.GetMemory(0);
+                this.madWriter.GetMemory();
                 this.madWriter.CopyToWriteHead(in rawSource);
                 this.madWriter.Flush();
                 this.writtenBytes += number + 2;

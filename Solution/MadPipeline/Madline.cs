@@ -1,13 +1,10 @@
-﻿using System.Data.Common;
-using MadPipeline.Thread;
-
-namespace MadPipeline
+﻿namespace MadPipeline
 {
+    using MadngineSource;
     using System;
     using System.Buffers;
     using System.Diagnostics;
     using System.Threading;
-    using MadngineSource;
 
     public sealed class Madline : IMadlineReader, IMadlineWriter
     {

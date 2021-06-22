@@ -1,6 +1,4 @@
-﻿
-
-namespace Tests
+﻿namespace Tests
 {
     using MadPipeline.MadngineSource;
     using Microsoft.VisualStudio.TestTools.UnitTesting;

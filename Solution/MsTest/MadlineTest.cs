@@ -1,6 +1,4 @@
-﻿using System.Data.Common;
-
-namespace Tests
+﻿namespace Tests
 {
     using System;
     using MadPipeline;
@@ -15,14 +13,14 @@ namespace Tests
 
         private readonly TestMemoryPool pool;
 
-        protected Madline Madline { get; }
-        protected IMadlineWriter MadWriter => Madline;
-        protected IMadlineReader MadReader => Madline;
+        protected Madline SmallMadline { get; }
+        protected IMadlineWriter SmallMadWriter => SmallMadline;
+        protected IMadlineReader SmallMadReader => SmallMadline;
 
         protected MadlineTest(int pauseWriterThreshold = MaximumSizeHigh, int resumeWriterThreshold = MaximumSizeLow)
         {
             this.pool = new TestMemoryPool();
-            this.Madline = new Madline(
+            this.SmallMadline = new Madline(
                 new MadlineOptions(
                     this.pool,
                     pauseWriterThreshold,
@@ -52,6 +50,7 @@ namespace Tests
             var array = new byte[bodyLength + 2];
             Array.Copy(headerBytes, array, headerBytes.Length);
             // 임의의 정보를 갖는 바디를 채워준다.
+            
             for (var i = 2; i < bodyLength+2; ++i)
             {
                 array[i] = (byte) r.Next(256);
@@ -78,10 +77,9 @@ namespace Tests
         // 헤더 제외한 바디길이
         public static int GetBodyLengthFromMessage(ReadOnlySequence<byte> source)
         {
-            var num = (int) source.Length - 2;
-            return num;
+            return (int) source.Length - 2;
         }
-        // 헤더 제외한 바디만큼만 갖고오는
+        // 헤더 제외한 바디만큼만 짤라서 갖고오기
         public static byte[] GetBodyFromMessage(ReadOnlySequence<byte> source)
         {
             return source.Length < 2 ? default : source.Slice(2, source.Length-2).ToArray();
@@ -89,8 +87,8 @@ namespace Tests
 
         public void Dispose()
         {
-            this.MadWriter.CompleteWriter();
-            this.MadReader.CompleteReader();
+            this.SmallMadWriter.CompleteWriter();
+            this.SmallMadReader.CompleteReader();
             this.pool.Dispose();
         }
     }

@@ -1,8 +1,7 @@
-﻿using System.Buffers;
-using System.Threading;
-
-namespace MadPipeline
+﻿namespace MadPipeline
 {
+    using System.Buffers;
+    using System.Threading;
     using MadngineSource;
 
     public sealed class MadlineCallbacks

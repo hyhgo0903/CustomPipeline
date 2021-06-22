@@ -1,12 +1,8 @@
-﻿using System.Threading;
-using MadPipeline;
-
-namespace Tests
+﻿namespace Tests
 {
-    using System.Buffers;
-    using System.Text;
+    using System.Threading;
     using Microsoft.VisualStudio.TestTools.UnitTesting;
-    using Infrastructure;
+    using System.Text;
 
     [TestClass]
     public sealed class ThreadTests : MadlineTest
@@ -29,10 +25,10 @@ namespace Tests
         {
             ++this.writeProcessPassed;
             var rawSource = CreateMessage(Encoding.ASCII.GetBytes("Hello World!"));
-            if (this.MadWriter.TryWrite(rawSource) == false)
+            if (this.SmallMadWriter.TryWrite(rawSource) == false)
             {
                 // TryWrite에 실패한다면 이 함수를 액션으로 예약
-                this.MadWriter.WriteSignal().OnCompleted(
+                this.SmallMadWriter.WriteSignal().OnCompleted(
                     () =>
                     {
                         this.WriteProcess();
@@ -43,14 +39,14 @@ namespace Tests
         public void ReadProcess()
         {
             ++this.readProcessPassed;
-            var resultInt = this.MadReader.TryRead(out var result);
+            var resultInt = this.SmallMadReader.TryRead(out var result);
             if (resultInt != 0)
             {
                 var message = GetBodyFromMessage(result);
                 Assert.AreNotEqual("Hell World!", Encoding.ASCII.GetString(message));
                 Assert.AreEqual("Hello World!", Encoding.ASCII.GetString(message));
                 Assert.AreEqual(12, GetBodyLengthFromMessage(result));
-                this.MadReader.AdvanceTo(result.End);
+                this.SmallMadReader.AdvanceTo(result.End);
                 if (resultInt == 1)
                 {
                     // 아직 읽을 게 남은 경우이므로 다시 읽기 시도
@@ -59,14 +55,14 @@ namespace Tests
             }
             else
             {
-                this.MadReader.DoRead().Then(
+                this.SmallMadReader.DoRead().Then(
                     readResult =>
                     {
                         var message = GetBodyFromMessage(readResult);
                         Assert.AreNotEqual("Hell World!", Encoding.ASCII.GetString(message));
                         Assert.AreEqual("Hello World!", Encoding.ASCII.GetString(message));
                         Assert.AreEqual(12, GetBodyLengthFromMessage(readResult));
-                        this.MadReader.AdvanceTo(readResult.End);
+                        this.SmallMadReader.AdvanceTo(readResult.End);
                         this.ReadProcess();
                     });
             }

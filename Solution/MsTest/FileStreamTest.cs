@@ -8,7 +8,7 @@
     using System.Threading;
 
     [TestClass]
-    public sealed class BaseOnCapacity : MadlineTest
+    public sealed class FileStreamTests : MadlineTest
     {
         private readonly Madline madline;
         private readonly IMadlineWriter madWriter;
@@ -19,7 +19,7 @@
         private long readBytes;
         private bool endReader;
 
-        public BaseOnCapacity()
+        public FileStreamTests()
         {
             // 기존의 Threshold 가진 madline으로 테스트를 진행했습니다.
             var malineOptions = new MadlineOptions();
@@ -86,7 +86,7 @@
             var resultInt = this.madReader.TryRead(out var result);
             if (resultInt > 0)
             {
-                this.SendToSocket(in result);
+                this.SendToFile(in result);
                 if (resultInt == 1)
                 {
                     // 아직 읽을 게 남은 경우이므로 다시 읽기 시도
@@ -98,25 +98,31 @@
                 this.madReader.DoRead().Then(
                     readResult =>
                     {
-                        this.SendToSocket(in readResult);
+                        this.SendToFile(in readResult);
                     });
             }
         }
 
-        public void SendToSocket(in ReadOnlySequence<byte> result)
+        public void SendToFile(in ReadOnlySequence<byte> result)
         {
+            using (var readFile = new StreamWriter(@"..\FileStream.txt", true))
+            {
+                var messageArr = result.ToArray();
+                foreach (var message in messageArr)
+                {
+                    string format = message.ToString("B");
+                    readFile.Write(format);
+                }
+                //readFile.WriteLine(); 
+            }
             this.readBytes += result.Length;
             this.madReader.AdvanceTo(result.End);
         }
         
-        // 1GB
-        [DataRow(1073741824)]
+        [DataRow(50000)]
         [TestMethod]
-        public void BaseOnCapacityTest(int capacity)
+        public void FileStreamTest(int capacity)
         {
-            var sw = new Stopwatch();
-            sw.Start();
-
             this.leftoverBytes = capacity;
             var writeThread = new Thread(this.StartWrite);
             var readThread = new Thread(this.StartRead);
@@ -126,12 +132,6 @@
             this.madWriter.CompleteWriter();
             this.endReader = true;
             readThread.Join();
-            sw.Stop();
-            using (var readFile = new StreamWriter(@"..\1GBTest.txt", true))
-            {
-                readFile.WriteLine("Capacity = {0},\twrittenBytes = {1},\treadBytes = {2},\nTime = {3} millisecond",
-                    capacity, this.writtenBytes, this.readBytes, sw.ElapsedMilliseconds);
-            }
             Assert.AreEqual(capacity, this.readBytes);
         }
     }

@@ -1,6 +1,5 @@
 ﻿namespace Tests
 {
-    using System;
     using System.Buffers;
     using MadPipeline;
     using Microsoft.VisualStudio.TestTools.UnitTesting;
