@@ -78,11 +78,16 @@
         
         public MadlineCallbacks Callback { get; }
 
+        public ReadOnlySequence<byte> ReadBuffer
+            => (this.readHead == null) || (this.readTail == null) || this.unconsumedBytes <= 0 ? default
+                : new ReadOnlySequence<byte>(
+                    this.readHead, this.readHeadIndex,
+                    this.readTail, this.readTailIndex);
         #region Thread
 
         // 2개의 쓰레드 이용 
         // 쓰기부 읽기부 메서드별로 구분되도록 지원해야
-        
+
         // 일단 스레드 region에서 수정 중이라 순서는 완료되고 나서 정상화
 
         //private Consumer Consumer { get; }
@@ -127,7 +132,7 @@
         
         private void AllocateWriteHead(int sizeHint)
         {
-            if (this.operationState.IsWritingActive && this.writingHeadMemory.Length != 0 &&
+            if (this.operationState.IsWritingPaused && this.writingHeadMemory.Length != 0 &&
                 this.writingHeadMemory.Length >= sizeHint)
             {
                 return;
@@ -275,10 +280,6 @@
 
                     Debug.Assert(this.unconsumedBytes >= 0, "Length has gone negative");
 
-                    if (this.unconsumedBytes < this.resumeWriterThreshold)
-                    {
-                        this.operationState.ResumeWrite();
-                    }
                 }
 
 
@@ -327,10 +328,11 @@
 
                 this.operationState.EndRead();
             }
-            // 쓰는 중이거나 threshold넘어 pause된 경우라면 resume까지 쓰는걸 막음
-            if (this.operationState.IsWritingActive == false
-                && this.operationState.IsWritingPaused == false)
+
+
+            if (this.State.IsWritingPaused && this.unconsumedBytes < this.resumeWriterThreshold)
             {
+                this.operationState.ResumeWrite();
                 this.Callback.WriteSignal.Set();
                 this.Callback.WriteSignal.Reset();
             }
@@ -455,10 +457,24 @@
             }
 
             this.Advance(bytes);
+            this.Flush();
             return true;
         }
-        
 
+        public bool WriteCheck()
+        {
+            if (this.operationState.IsWritingPaused)
+            {
+                return false;
+            }
+
+            if (this.isWriterCompleted)
+            {
+                throw new Exception("No Writing Allowed");
+            }
+
+            return true;
+        }
 
 
         public void CopyToWriteHead(in ReadOnlyMemory<byte> source)
@@ -510,14 +526,13 @@
 
         public Signal WriteSignal()
         {
-            this.Callback.WriteSignal.Reset();
             return this.Callback.WriteSignal;
         }
 
         public Signal DoAdvance(int bytes)
         {
             this.Advance(bytes);
-            this.Callback.WriteSignal.Reset();
+            this.Flush();
             return this.Callback.WriteSignal;
         }
 

@@ -1,4 +1,7 @@
-﻿namespace PipePerformanceTest
+﻿using System.Diagnostics.CodeAnalysis;
+using System.Threading;
+
+namespace PipePerformanceTest
 {
     using System;
     using System.IO;
@@ -10,6 +13,8 @@
         private Madline madline;
         private IMadlineWriter madWriter;
         private IMadlineReader madReader;
+
+        private bool writeSet;
         
 
         public MadPipeTester()
@@ -27,23 +32,24 @@
 
         public void Advance(int bytes)
         {
-            this.madWriter.Advance(bytes);
-            this.madWriter.Flush();
-            //if (this.madWriter.TryAdvance(bytes))
-            //{
-            //    this.madWriter.Flush();
-            //}
-            //else
-            //{
-            //    this.madWriter.WriteSignal().OnCompleted(() =>
-            //    {
-            //        this.madWriter.Advance(bytes);
-            //        this.madWriter.Flush();
-            //    });
-            //}
+            if (this.madWriter.TryAdvance(bytes))
+            {
+                this.WriteCallback();
+            }
+            else
+            {
+                this.madWriter.DoAdvance(bytes).OnCompleted(this.WriteCallback);
+                this.writeSet = false;
+            }
+
             //while (this.madline.State.IsWritingPaused)
             //{
             //}
+        }
+
+        public void WriteCallback()
+        {
+            this.writeSet = true;
         }
 
         // 반드시 청크 형식으로 된 것만..
@@ -63,10 +69,11 @@
 
             }
 
-            while (this.madline.State.IsReadingPaused)
-            {
-            }
+            //while (this.madline.State.IsReadingPaused)
+            //{
+            //}
         }
+
         public void ProcessCopy(FileStream fileStream, in ReadOnlySequence<byte> result, int bytes)
         {
             var remains = bytes;

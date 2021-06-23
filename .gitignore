@@ -6,3 +6,5 @@
 /testFile.tmp
 /destFile.tmp
 *.tmp
+Solution/MsTest/TestFrom.txt
+Solution/MsTest/TestTo.txt
