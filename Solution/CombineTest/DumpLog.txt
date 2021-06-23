@@ -1,0 +1,35 @@
+test : MadPipelines
+target : ../../../testTxt.txt
+time : 00:00:01.04
+cpu rate : average = 0 % ( min : 0, max 0 )
+ram usage : average = 40912 KB ( min : 40912, max 40912 )
+diskIO : average = 100 % ( min : 100, max 100 )
+
+test : MadPipelines
+target : ../../../testTxt.txt
+time : 00:00:01.04
+cpu rate : average = 0 % ( min : 0, max 0 )
+ram usage : average = 40324 KB ( min : 40324, max 40324 )
+diskIO : average = 100 % ( min : 100, max 100 )
+
+test : MadPipelines
+target : ../../../testTxt.txt
+time : 00:00:01.04
+cpu rate : average = 0 % ( min : 0, max 0 )
+ram usage : average = 40644 KB ( min : 40644, max 40644 )
+diskIO : average = 100 % ( min : 100, max 100 )
+
+test : MadPipelines
+target : ../../../testTxt.txt
+time : 00:00:01.04
+cpu rate : average = 0 % ( min : 0, max 0 )
+ram usage : average = 41100 KB ( min : 41100, max 41100 )
+diskIO : average = 100 % ( min : 100, max 100 )
+
+test : MadPipelines
+target : ../../../testTxt.txt
+time : 00:00:01.04
+cpu rate : average = 0 % ( min : 0, max 0 )
+ram usage : average = 40732 KB ( min : 40732, max 40732 )
+diskIO : average = 100 % ( min : 100, max 100 )
+

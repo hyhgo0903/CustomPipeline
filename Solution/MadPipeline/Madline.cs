@@ -44,7 +44,6 @@
         private readonly long pauseWriterThreshold;
         // Flush()가 차단을 중지할 때 Pipe의 바이트 수
         private readonly long resumeWriterThreshold;
-
         private readonly object sync;
 
         // 버퍼 메모리풀 관리 기존 파이프라인대로 운용
@@ -443,7 +442,7 @@
             return true;
         }
 
-        public bool TryAdvance()
+        public bool TryAdvance(int bytes)
         {
             if (this.operationState.IsWritingPaused)
             {
@@ -455,6 +454,7 @@
                 throw new Exception("No Writing Allowed");
             }
 
+            this.Advance(bytes);
             return true;
         }
         
@@ -514,74 +514,51 @@
             return this.Callback.WriteSignal;
         }
 
+        public Signal DoAdvance(int bytes)
+        {
+            this.Advance(bytes);
+            this.Callback.WriteSignal.Reset();
+            return this.Callback.WriteSignal;
+        }
+
         #endregion
 
         #region Read
 
-        public bool PickTargetBytes()
-        {
-            // 읽을 헤더 자체가 없거나 무결성 검사 실패하는 경우 그냥 false
-            if (this.unconsumedBytes < 2
-                || this.readHead == null
-                || this.readTail == null)
-            {
-                return false;
-            }
-
-            lock (this.sync)
-            {
-                var header = new Header(new ReadOnlySequence<byte>(
-                    this.readHead,
-                    this.readHeadIndex,
-                    this.readTail,
-                    this.readTailIndex));
-                header.Deconstruct(out var bodyLength, out _, out _);
-                Interlocked.Exchange(ref this.targetBytes, bodyLength + Constant.HeaderBytes);
-            }
-            return true;
-        }
-
         // 변수로 넣는 targetLength는 DecodingFramer로 헤더 분석 후 사이즈 전달은 인자를 넣는다고 가정
-        public int TryRead(out ReadOnlySequence<byte> result)
+        public bool TryRead(out ReadOnlySequence<byte> result, int targetLength)
         {
             lock (this.sync)
             {
-                if (this.unconsumedBytes < 2 || this.operationState.IsReadingPaused
+                if (this.unconsumedBytes <= 0
                 || this.readHead == null || this.readTail == null)
                 {
                     this.operationState.PauseRead();
+                }
+                if (this.operationState.IsReadingPaused)
+                {
+                    this.targetBytes = targetLength;
                     result = default;
-                    return 0;
+                    return false;
                 }
 
                 if (this.isReaderCompleted)
                 {
                     throw new Exception("Reader is Completed");
                 }
-
-                // 헤더 읽어와서 bodyLength를 기록한다
-                var header = new Header(new ReadOnlySequence<byte>(
-                    this.readHead,
-                    this.readHeadIndex,
-                    this.readTail,
-                    this.readTailIndex));
-                header.Deconstruct(out var bodyLength, out _, out _);
-
-                // 이 길이 이상이어야 읽는다.
-                var targetLength = bodyLength + Constant.HeaderBytes;
+                
                 if (this.unconsumedBytes >= targetLength)
                 {
-                    this.GetReadResult(out result, targetLength);
-                    // 헤더크기만큼 더 쓸 데이터가 없으면 읽기를 완료(2)
-                    // 아니면 또 쓰기 시도할 예정으로 1 return
-                    return this.unconsumedBytes < 2 + targetLength ? 2 : 1;
+                    this.GetReadResult(out result);
+                    // 더 쓸 데이터가 없으면 읽기를 완료(2)
+                    // 아니면 또 쓰기 시도할 예정으로 1 return (읽는건 중단 없이 끝까지 읽는다)
+                    return true;
                 }
 
-                // 아니면 쓰기 예약만
-                this.operationState.PauseRead();
                 this.targetBytes = targetLength;
+                this.operationState.PauseRead();
                 result = default;
-                return 0;
+                return false;
             }
         }
         
@@ -592,7 +569,7 @@
             return this.Callback.ReadPromise.GetFuture();
         }
 
-        private void GetReadResult(out ReadOnlySequence<byte> result, int targetLength)
+        private void GetReadResult(out ReadOnlySequence<byte> result)
         {
             var head = this.readHead;
             if (head != null)
@@ -603,8 +580,7 @@
                 result = new ReadOnlySequence<byte>(head,
                         this.readHeadIndex,
                         this.readTail,
-                        this.readTailIndex)
-                    .Slice(0, targetLength);
+                        this.readTailIndex);
             }
             else
             {
@@ -679,10 +655,10 @@
                 // 타겟바이트 이상으로 들어온 경우 예약된 읽기명령을 실행
                 if (this.operationState.IsReadingPaused)
                 {
-                    if (this.PickTargetBytes() && this.unconsumedBytes >= this.targetBytes)
+                    if (this.unconsumedBytes >= this.targetBytes)
                     {
                         this.operationState.ResumeRead();
-                        this.GetReadResult(out var result, this.targetBytes);
+                        this.GetReadResult(out var result);
                         this.Callback.ReadPromise.Complete(result);
                         this.Callback.ResetReadPromise();
                     }

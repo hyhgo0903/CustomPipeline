@@ -32,22 +32,30 @@
 
         public void Advance(int bytes)
         {
-            this.madWriter.Advance(bytes);
-            this.madWriter.Flush();
+            if (this.madWriter.TryAdvance(bytes))
+            {
+                this.madWriter.Flush();
+            }
+            else
+            {
+                this.madWriter.WriteSignal().OnCompleted(() =>
+                {
+                    this.madWriter.Advance(bytes);
+                    this.madWriter.Flush();
+                });
+            }
+
+            while (this.madline.State.IsWritingPaused)
+            {
+            }
         }
 
         // 반드시 청크 형식으로 된 것만..
         public void Read(FileStream fileStream, int bytes)
         {
-            var resultInt = this.madReader.TryRead(out var result);
-            if (resultInt > 0)
+            if (this.madReader.TryRead(out var result, 0))
             {
                 this.ProcessCopy(fileStream, in result, bytes);
-                if (resultInt == 1)
-                {
-                    // 아직 읽을 게 남은 경우이므로 다시 읽기 시도
-                    this.Read(fileStream, 0);
-                }
             }
             else
             {
@@ -56,6 +64,11 @@
                     {
                         this.ProcessCopy(fileStream, in readResult, bytes);
                     });
+
+            }
+
+            while (this.madline.State.IsReadingPaused)
+            {
             }
         }
         public void ProcessCopy(FileStream fileStream, in ReadOnlySequence<byte> result, int bytes)
@@ -77,16 +90,16 @@
                 }
             }
 
-            this.madReader.AdvanceTo(result.End);
+            this.madReader.AdvanceTo(result.GetPosition(bytes));
         }
 
         public void CompleteWriter()
         {
-            //this.madWriter.CompleteWriter();
+            this.madWriter.CompleteWriter();
         }
         public void CompleteReader()
         {
-            //this.madReader.CompleteReader();
+            this.madReader.CompleteReader();
         }
     }
 }

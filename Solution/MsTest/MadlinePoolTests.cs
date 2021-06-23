@@ -89,7 +89,7 @@
 
             madline.GetMemory(writeSize);
 
-            madline.TryRead(out var readResult);
+            madline.TryRead(out var readResult, 0);
             
             madline.AdvanceTo(readResult.End);
             madline.Write(new byte[writeSize]);

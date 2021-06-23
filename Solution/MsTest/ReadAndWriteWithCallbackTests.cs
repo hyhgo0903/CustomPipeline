@@ -14,7 +14,7 @@
         public void WriteProcess()
         {
             ++this.writeProcessPassed;
-            var rawSource = CreateMessage(Encoding.ASCII.GetBytes("Hello World!"));
+            var rawSource = Encoding.ASCII.GetBytes("Hello World!");
             if (this.SmallMadWriter.TryWrite(rawSource) == false)
             {
                 // TryWrite에 실패한다면 이 함수를 액션으로 예약
@@ -29,19 +29,12 @@
         public void ReadProcess()
         {
             ++this.readProcessPassed;
-            var resultInt = this.SmallMadReader.TryRead(out var result);
-            if (resultInt > 0)
+            if (this.SmallMadReader.TryRead(out var result, 0))
             {
-                var message = GetBodyFromMessage(result);
-                Assert.AreNotEqual("Hell World!", Encoding.ASCII.GetString(message));
-                Assert.AreEqual("Hello World!", Encoding.ASCII.GetString(message));
-                Assert.AreEqual(12, GetBodyLengthFromMessage(result));
+                Assert.AreNotEqual("Hell World!", Encoding.ASCII.GetString(result));
+                Assert.AreEqual("Hello World!", Encoding.ASCII.GetString(result));
+                Assert.AreEqual(12, result.Length);
                 this.SmallMadReader.AdvanceTo(result.End);
-                if (resultInt == 1)
-                {
-                    // 아직 읽을 게 남은 경우이므로 다시 읽기 시도
-                    this.ReadProcess();
-                }
             }
             else
             {
@@ -49,16 +42,10 @@
                     readResult =>
                     {
                         ++this.readProcessPassed;
-                        var message = GetBodyFromMessage(readResult);
-                        Assert.AreNotEqual("Hell World!", Encoding.ASCII.GetString(message));
-                        Assert.AreEqual("Hello World!", Encoding.ASCII.GetString(message));
-                        Assert.AreEqual(12, GetBodyLengthFromMessage(readResult));
+                        Assert.AreNotEqual("Hell World!", Encoding.ASCII.GetString(readResult));
+                        Assert.AreEqual("Hello World!", Encoding.ASCII.GetString(readResult));
+                        Assert.AreEqual(12, readResult.Length);
                         this.SmallMadReader.AdvanceTo(readResult.End);
-                        if (resultInt == 1)
-                        {
-                            // 아직 읽을 게 남은 경우이므로 다시 읽기 시도
-                            this.ReadProcess();
-                        }
                     });
             }
         }
@@ -85,7 +72,7 @@
 
             Assert.IsTrue(this.SmallMadline.State.IsWritingPaused);
             
-            this.SmallMadReader.TryRead(out var result);
+            this.SmallMadReader.TryRead(out var result, 0);
             this.SmallMadReader.AdvanceTo(result.End);
             // Advance 과정에서 예약된 쓰기가 한 번 호출된다.
 
@@ -105,29 +92,14 @@
         {
             // 읽을게 없음 : TryRead가 false로 되며 예약
             this.ReadProcess();
-            this.ReadProcess();
-            this.ReadProcess();
             // TryWrite의 Flush과정에서 읽기 예약된 게 있다면 실행
             this.WriteProcess();
             this.WriteProcess();
             this.WriteProcess();
             
             // 처음 ReadProcess 2회 호출되며 세 번, 예약된 ReadProcess가 진행되며 네 번
-            Assert.AreEqual(4, this.readProcessPassed);
+            Assert.AreEqual(2, this.readProcessPassed);
         }
-
-
-        [TestMethod]
-        public void ReadCallOnlyOnceTests()
-        {
-            this.WriteProcess();
-            this.WriteProcess();
-            this.WriteProcess();
-            // 타겟 알아서 잡으면서 끝까지 읽는지
-            this.ReadProcess();
-
-            Assert.AreEqual(3, this.writeProcessPassed);
-            Assert.AreEqual(3, this.readProcessPassed);
-        }
+        
     }
 }

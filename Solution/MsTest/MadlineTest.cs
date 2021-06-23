@@ -27,64 +27,7 @@
                     resumeWriterThreshold
                 ));
         }
-        // 랜덤
-        public static Random r = new Random();
-
-        // 바이트 배열로 헤더+바디 만들어주는 함수
-        public static ReadOnlyMemory<byte> CreateMessage(byte[] body)
-        {
-            var bodyLength = body.Length;
-            var header = new Header(bodyLength, false, false);
-            var headerBytes = header.Span.ToArray();
-            var array = new byte[bodyLength + 2];
-            Array.Copy(headerBytes, array, headerBytes.Length);
-            Array.Copy(body, 0, array, 2, bodyLength);
-
-            return new ReadOnlyMemory<byte>(array);
-        }
-        // 바디길이 지정하여 헤더+바디 만들어주는 함수(바디는 랜덤으로 채워짐)
-        public static ReadOnlyMemory<byte> CreateMessageWithRandomBody(int bodyLength)
-        {
-            var header = new Header(bodyLength, false, false);
-            var headerBytes = header.Span.ToArray();
-            var array = new byte[bodyLength + 2];
-            Array.Copy(headerBytes, array, headerBytes.Length);
-            // 임의의 정보를 갖는 바디를 채워준다.
-            
-            for (var i = 2; i < bodyLength+2; ++i)
-            {
-                array[i] = (byte) r.Next(256);
-            }
-
-            return new ReadOnlyMemory<byte>(array);
-        }
-        public static byte[] CreateByteArray(int bodyLength)
-        {
-            var header = new Header(bodyLength, false, false);
-            var headerBytes = header.Span.ToArray();
-            var body = new byte[bodyLength];
-            // 임의의 정보를 갖는 바디를 채워준다.
-            for (var i = 0; i < body.Length; ++i)
-            {
-                body[i] = (byte)r.Next(256);
-            }
-            var array = new byte[bodyLength + 2];
-            Array.Copy(headerBytes, array, headerBytes.Length);
-            Array.Copy(body, 0, array, headerBytes.Length, body.Length);
-
-            return array;
-        }
-        // 헤더 제외한 바디길이
-        public static int GetBodyLengthFromMessage(ReadOnlySequence<byte> source)
-        {
-            return (int) source.Length - 2;
-        }
-        // 헤더 제외한 바디만큼만 짤라서 갖고오기
-        public static byte[] GetBodyFromMessage(ReadOnlySequence<byte> source)
-        {
-            return source.Length < 2 ? default : source.Slice(2, source.Length-2).ToArray();
-        }
-
+        
         public void Dispose()
         {
             this.SmallMadWriter.CompleteWriter();
