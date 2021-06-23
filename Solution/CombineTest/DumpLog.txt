@@ -1,35 +1,28 @@
 test : MadPipelines
-target : ../../../testTxt.txt
-time : 00:00:01.04
-cpu rate : average = 0 % ( min : 0, max 0 )
-ram usage : average = 40912 KB ( min : 40912, max 40912 )
-diskIO : average = 100 % ( min : 100, max 100 )
+target : ../../../testFile.tmp
+time : 00:00:06.25
+cpu rate : average = 62.968132 % ( min : 0, max 84.6576 )
+ram usage : average = 823151.3 KB ( min : 70540, max 1075204 )
+diskIO : average = 19.892221 % ( min : 0, max 100 )
 
 test : MadPipelines
-target : ../../../testTxt.txt
-time : 00:00:01.04
-cpu rate : average = 0 % ( min : 0, max 0 )
-ram usage : average = 40324 KB ( min : 40324, max 40324 )
-diskIO : average = 100 % ( min : 100, max 100 )
+target : ../../../testFile.tmp
+time : 00:00:06.20
+cpu rate : average = 44.767372 % ( min : 0, max 61.657635 )
+ram usage : average = 878426 KB ( min : 62284, max 1116908 )
+diskIO : average = 19.831205 % ( min : 0, max 100 )
 
 test : MadPipelines
-target : ../../../testTxt.txt
-time : 00:00:01.04
-cpu rate : average = 0 % ( min : 0, max 0 )
-ram usage : average = 40644 KB ( min : 40644, max 40644 )
-diskIO : average = 100 % ( min : 100, max 100 )
+target : ../../../testFile.tmp
+time : 00:00:05.17
+cpu rate : average = 39.646423 % ( min : 0, max 54.425198 )
+ram usage : average = 1532 KB ( min : 1532, max 1532 )
+diskIO : average = 22.18405 % ( min : 0.02444458, max 100 )
 
 test : MadPipelines
-target : ../../../testTxt.txt
-time : 00:00:01.04
-cpu rate : average = 0 % ( min : 0, max 0 )
-ram usage : average = 41100 KB ( min : 41100, max 41100 )
-diskIO : average = 100 % ( min : 100, max 100 )
-
-test : MadPipelines
-target : ../../../testTxt.txt
-time : 00:00:01.04
-cpu rate : average = 0 % ( min : 0, max 0 )
-ram usage : average = 40732 KB ( min : 40732, max 40732 )
-diskIO : average = 100 % ( min : 100, max 100 )
+target : ../../../testFile.tmp
+time : 00:00:04.12
+cpu rate : average = 13.249086 % ( min : 0, max 25.454618 )
+ram usage : average = 1532 KB ( min : 1532, max 1532 )
+diskIO : average = 28.035725 % ( min : 0.4058075, max 100 )
 

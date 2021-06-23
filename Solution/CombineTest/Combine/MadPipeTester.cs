@@ -10,12 +10,7 @@
         private Madline madline;
         private IMadlineWriter madWriter;
         private IMadlineReader madReader;
-
-        private bool writeSet = false;
-        private bool readSet = false;
-
-        private int writeCount = 0;
-        private int readCount = 0;
+        
 
         public MadPipeTester()
         {
@@ -32,22 +27,23 @@
 
         public void Advance(int bytes)
         {
-            if (this.madWriter.TryAdvance(bytes))
-            {
-                this.madWriter.Flush();
-            }
-            else
-            {
-                this.madWriter.WriteSignal().OnCompleted(() =>
-                {
-                    this.madWriter.Advance(bytes);
-                    this.madWriter.Flush();
-                });
-            }
-
-            while (this.madline.State.IsWritingPaused)
-            {
-            }
+            this.madWriter.Advance(bytes);
+            this.madWriter.Flush();
+            //if (this.madWriter.TryAdvance(bytes))
+            //{
+            //    this.madWriter.Flush();
+            //}
+            //else
+            //{
+            //    this.madWriter.WriteSignal().OnCompleted(() =>
+            //    {
+            //        this.madWriter.Advance(bytes);
+            //        this.madWriter.Flush();
+            //    });
+            //}
+            //while (this.madline.State.IsWritingPaused)
+            //{
+            //}
         }
 
         // 반드시 청크 형식으로 된 것만..

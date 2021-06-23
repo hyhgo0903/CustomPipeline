@@ -1,8 +1,6 @@
 ﻿using System;
 using System.IO;
 using System.Threading;
-using System.Diagnostics;
-using System.Linq;
 
 namespace PipePerformanceTest
 {

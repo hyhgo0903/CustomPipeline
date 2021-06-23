@@ -117,7 +117,7 @@
 //        {
 //            var sw = new Stopwatch();
 //            sw.Start();
-            
+
 //            this.writeTimes = times;
 //            this.readTimes = times;
 //            var writeThread = new Thread(this.StartWrite);
@@ -134,7 +134,7 @@
 //            }
 //            Assert.AreEqual(this.writtenBytes, this.readBytes);
 //        }
-        
+
 //        [TestMethod]
 //        [DataRow(10000000)]
 //        public void SuperMassiveGetMemoryTest(int times)

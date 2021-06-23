@@ -11,8 +11,7 @@ namespace PipePerformanceTest
 
             testApp.InitializeTargetPipe(PipeBrand.MAD);
 
-            //testApp.RunFileCopy();
-            testApp.RunFileCopy("../../../testTxt.txt");
+            testApp.RunFileCopy();
 
             if (testApp.CheckFile())
             {

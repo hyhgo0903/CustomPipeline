@@ -3,3 +3,6 @@
 **/bin/
 **/obj/
 **/MadngineSource/
+/testFile.tmp
+/destFile.tmp
+*.tmp
