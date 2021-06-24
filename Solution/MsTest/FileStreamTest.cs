@@ -26,9 +26,11 @@
 
         public FileStreamTests()
         {
-            // 기존의 Threshold 가진 madline으로 테스트를 진행했습니다.
-            var malineOptions = new MadlineOptions();
+            // 기존의 Threshold 가진 madline으로 진행
+            var malineOptions = new MadlineOptions(null, 20000000000000, 10000000000000);
             this.madline = new Madline(malineOptions);
+            //this.madline = new Madline();
+
             this.madWriter = this.madline;
             this.madReader = this.madline;
 
@@ -61,7 +63,7 @@
                 {
                     this.ReadProcess();
                 }
-            } while (this.writeRemainBytes > 0);
+            } while (this.readRemainBytes > 0);
         }
 
         public void WriteProcess()

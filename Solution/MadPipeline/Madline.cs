@@ -72,6 +72,10 @@
             //this.Consumer = new Consumer(this.syncEvents, this.operationState);
         }
 
+        public Madline() : this(MadlineOptions.Default)
+        {
+        }
+
         public long Length => this.unconsumedBytes;
 
         public MadlineOperationState State => this.operationState;

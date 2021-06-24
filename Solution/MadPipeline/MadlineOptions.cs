@@ -37,7 +37,7 @@
         }
 
         // 편의를 위한 디폴트 옵션
-        public static MadlineOptions Default { get; } = new();
+        public static MadlineOptions Default { get; } = new MadlineOptions();
 
         // 미리 만들어서 Madline 생성 시 대입됨
         public long PauseWriterThreshold { get; }
