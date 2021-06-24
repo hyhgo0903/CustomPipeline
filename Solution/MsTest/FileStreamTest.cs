@@ -27,7 +27,7 @@
         public FileStreamTests()
         {
             // 기존의 Threshold 가진 madline으로 진행
-            var malineOptions = new MadlineOptions(null, 20000000000000, 10000000000000);
+            var malineOptions = new MadlineOptions();
             this.madline = new Madline(malineOptions);
             //this.madline = new Madline();
 

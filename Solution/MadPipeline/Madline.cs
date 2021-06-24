@@ -142,6 +142,7 @@
                 return;
             }
 
+
             lock (this.sync)
             {
                 this.operationState.BeginWrite();
@@ -213,11 +214,8 @@
         // Segment를 풀에서 꺼내오기(풀에 없으면 새로 만듦)
         private BufferSegment CreateSegment()
         {
-            lock (this.sync)
-            {
-                var popped = this.bufferSegmentPool.TryPop(out var segment) ? segment : new BufferSegment();
-                return popped;
-            }
+            var popped = this.bufferSegmentPool.TryPop(out var segment) ? segment : new BufferSegment();
+            return popped;
         }
         
         // 다 읽은 Segment를 풀로 반환하기
@@ -230,11 +228,7 @@
             {
                 return;
             }
-
-            lock (this.sync)
-            {
-                this.bufferSegmentPool.Push(segment);
-            }
+            this.bufferSegmentPool.Push(segment);
         }
 
         #endregion
@@ -283,7 +277,6 @@
                     Interlocked.Exchange(ref this.lastExaminedIndex, calculatedExaminedIndex);
 
                     Debug.Assert(this.unconsumedBytes >= 0, "Length has gone negative");
-
                 }
 
 
@@ -367,8 +360,7 @@
             var completed = this.isReaderCompleted;
 
             this.Flush();
-
-            lock (this.sync)
+            lock(this.sync)
             {
                 this.isWriterCompleted = true;
 
@@ -382,7 +374,6 @@
         public void CompleteReader()
         {
             var completed = this.isWriterCompleted;
-            
             lock (this.sync)
             {
                 if (this.operationState.IsReadingActive)
@@ -550,7 +541,7 @@
             lock (this.sync)
             {
                 if (this.unconsumedBytes <= 0
-                || this.readHead == null || this.readTail == null)
+                    || this.readHead == null || this.readTail == null)
                 {
                     this.operationState.PauseRead();
                 }
@@ -565,7 +556,7 @@
                 {
                     throw new Exception("Reader is Completed");
                 }
-                
+
                 if (this.unconsumedBytes >= targetLength)
                 {
                     this.GetReadResult(out result);
